@@ -73,6 +73,7 @@ Tabelle `offers`:
 - `end_date` TEXT NOT NULL
 - `origin_city` TEXT NOT NULL
 - `destination_city` TEXT NOT NULL
+- `free_km` INTEGER NOT NULL
 - `first_seen_timestamp` TEXT NOT NULL
 
 Hinweise:
