@@ -161,14 +161,14 @@ Implementiere Schema-Init (`CREATE TABLE IF NOT EXISTS`) in `sqlite_store` gemä
 Implementiere Lesen bekannter Angebote, Schreiben neuer Angebote und Soft-Delete-Markierung entfernter IDs.
 
 **Acceptance Criteria**
-- [ ] Read liefert nutzbaren Zustand für Delta-Berechnung.
-- [ ] Insert schreibt nur valide Angebote in alle erforderlichen Spalten.
-- [ ] Entfernte IDs werden **nicht physisch gelöscht**, sondern auf `is_deleted=1` gesetzt und mit `deleted_at` (lokale Zeit, ISO-8601) markiert.
-- [ ] Falls ein soft-gelöschtes Angebot wieder in der API erscheint, wird es reaktiviert (`is_deleted=0`, `deleted_at=NULL`).
-- [ ] Fehlerfälle werden explizit signalisiert (nicht still geschluckt).
-- [ ] Unit-Tests decken Read/Insert/Cleanup inkl. Fehlerfälle ab.
-- [ ] Bei kritischen DB-Fehlern läuft der Prozess kontrolliert weiter: Fehler loggen, aktuellen Zyklus abbrechen, nächsten Zyklus regulär starten.
-- [ ] Tests validieren das Verhalten „kontrolliertes Weiterlaufen“ bei kritischen DB-Fehlern.
+- [x] Read liefert nutzbaren Zustand für Delta-Berechnung.
+- [x] Insert schreibt nur valide Angebote in alle erforderlichen Spalten.
+- [x] Entfernte IDs werden **nicht physisch gelöscht**, sondern auf `is_deleted=1` gesetzt und mit `deleted_at` (lokale Zeit, ISO-8601) markiert.
+- [x] Falls ein soft-gelöschtes Angebot wieder in der API erscheint, wird es reaktiviert (`is_deleted=0`, `deleted_at=NULL`).
+- [x] Fehlerfälle werden explizit signalisiert (nicht still geschluckt).
+- [x] Unit-Tests decken Read/Insert/Cleanup inkl. Fehlerfälle ab.
+- [x] Bei kritischen DB-Fehlern läuft der Prozess kontrolliert weiter: Fehler loggen, aktuellen Zyklus abbrechen, nächsten Zyklus regulär starten.
+- [x] Tests validieren das Verhalten „kontrolliertes Weiterlaufen“ bei kritischen DB-Fehlern.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/storage/sqlite_store.py`
