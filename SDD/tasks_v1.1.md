@@ -336,11 +336,16 @@ Implementiere in `offer_matcher.py` die Highlight-Regel und die Delta-Klassifika
 Implementiere Mail-Templates mit Sektionen „neu“ und „bestehend“ sowie klarer visueller Highlight-Markierung.
 
 **Acceptance Criteria**
-- [ ] HTML enthält beide Sektionen in stabiler Struktur.
-- [ ] Highlight-Angebote sind deutlich hervorgehoben.
-- [ ] Renderer verarbeitet bereits klassifizierte Daten, ohne Fachentscheidungen zu treffen.
-- [ ] Tests validieren Struktur, Sektionen und Highlight-Output.
-- [ ] **Open-Item-Vermerk:** Finale Mail-Struktur/Markierungsstil wird in diesem Task festgelegt und als Test-Oracle abgesichert.
+- [x] HTML enthält beide Sektionen in stabiler Struktur.
+- [x] Highlight-Angebote sind deutlich hervorgehoben.
+- [x] Renderer verarbeitet bereits klassifizierte Daten, ohne Fachentscheidungen zu treffen.
+- [x] Tests validieren Struktur, Sektionen und Highlight-Output.
+- [x] **Open-Item-Vermerk:** Finale Mail-Struktur/Markierungsstil wird in diesem Task festgelegt und als Test-Oracle abgesichert.
+
+**Entscheidung zum Open Item:** Die Mail verwendet die stabilen Sektionen
+`new-offers` und `existing-offers`. Angebote werden als `<li>` mit
+`data-offer-id` gerendert; Highlights erhalten die Klasse `offer--highlight`
+und das Label „Äußerst interessant“.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/mailer/templates.py`
