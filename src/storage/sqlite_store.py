@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from src.config.timezone import LOCAL_TIMEZONE
 from src.models.offer import Offer
 
 LOGGER = logging.getLogger("movacar_alert.storage.sqlite_store")
@@ -104,7 +105,7 @@ class SQLiteStore:
         if any(not isinstance(offer, Offer) for offer in validated_offers):
             raise ValueError("insert_offers accepts only valid Offer instances.")
 
-        first_seen_timestamp = datetime.now().astimezone().isoformat()
+        first_seen_timestamp = datetime.now(LOCAL_TIMEZONE).isoformat()
         try:
             with sqlite3.connect(self.database_path) as connection:
                 connection.executemany(
@@ -146,7 +147,7 @@ class SQLiteStore:
         if any(not isinstance(offer_id, str) or not offer_id.strip() for offer_id in ids):
             raise ValueError("active_offer_ids must contain non-empty strings.")
 
-        deleted_at = datetime.now().astimezone().isoformat()
+        deleted_at = datetime.now(LOCAL_TIMEZONE).isoformat()
         try:
             with sqlite3.connect(self.database_path) as connection:
                 if ids:
@@ -177,7 +178,11 @@ class SQLiteStore:
     def purge_soft_deleted_offers(self, *, now: datetime | None = None) -> int:
         """Permanently remove soft-deleted offers older than 14 local days."""
 
-        reference_time = datetime.now().astimezone() if now is None else now.astimezone()
+        reference_time = (
+            datetime.now(LOCAL_TIMEZONE)
+            if now is None
+            else now.astimezone(LOCAL_TIMEZONE)
+        )
         cutoff = reference_time - timedelta(days=14)
         try:
             with sqlite3.connect(self.database_path) as connection:

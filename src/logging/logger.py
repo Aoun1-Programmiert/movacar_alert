@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import logging
 import sys
+from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Final
+
+from src.config.timezone import LOCAL_TIMEZONE
 
 
 LOG_MAX_BYTES: Final = 10 * 1024 * 1024
@@ -32,6 +35,9 @@ def configure_logger(
     _replace_handlers(logger)
 
     formatter = logging.Formatter(LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
+    formatter.converter = lambda timestamp: datetime.fromtimestamp(
+        timestamp, tz=LOCAL_TIMEZONE
+    ).timetuple()
     stdout_handler = logging.StreamHandler(sys.stdout)
     handlers: list[logging.Handler] = [stdout_handler]
     if log_file_path is not None:

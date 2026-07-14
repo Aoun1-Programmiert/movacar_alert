@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from src.api.api_client import ApiNetworkError
+from src.config.timezone import LOCAL_TIMEZONE
 from src.loop import poll_loop
 from src.logging.logger import configure_logger
 from src.mailer.smtp_mailer import SmtpTransportError
@@ -240,9 +241,9 @@ def test_cycle_converts_dates_to_local_time_before_matching(
 
     poll_loop.run_polling_cycle(settings, store)  # type: ignore[arg-type]
 
-    assert captured[0].start_date == offer.start_date.astimezone()
-    assert captured[0].end_date == offer.end_date.astimezone()
-    assert captured[0].start_date.tzinfo == datetime.now().astimezone().tzinfo
+    assert captured[0].start_date == offer.start_date.astimezone(LOCAL_TIMEZONE)
+    assert captured[0].end_date == offer.end_date.astimezone(LOCAL_TIMEZONE)
+    assert captured[0].start_date.tzinfo == LOCAL_TIMEZONE
 
 
 def test_poll_forever_sleeps_for_configured_interval(
@@ -272,17 +273,13 @@ def test_poll_forever_sleeps_for_configured_interval(
 
 
 @pytest.mark.parametrize(
-    ("current_time", "expected_hour"),
-    (
-        (datetime(2026, 7, 14, 9, 5), 9),
-        (datetime(2026, 7, 14, 21, 1), 21),
-    ),
+    "current_time",
+    (datetime(2026, 7, 14, 9, 5), datetime(2026, 7, 14, 21, 1)),
 )
-def test_poll_forever_sends_summary_at_local_schedule(
+def test_poll_forever_does_not_send_summary_for_slot_reached_at_startup(
     monkeypatch: pytest.MonkeyPatch,
     settings: SimpleNamespace,
     current_time: datetime,
-    expected_hour: int,
 ) -> None:
     sent: list[object] = []
     monkeypatch.setattr(
@@ -304,8 +301,40 @@ def test_poll_forever_sends_summary_at_local_schedule(
             now=lambda: current_time,
         )
 
+    assert sent == []
+
+
+def test_poll_forever_sends_summary_after_crossing_scheduled_time(
+    monkeypatch: pytest.MonkeyPatch, settings: SimpleNamespace
+) -> None:
+    sent: list[object] = []
+    timestamps = iter(
+        (
+            datetime(2026, 7, 14, 8, 59),
+            datetime(2026, 7, 14, 9, 1),
+            datetime(2026, 7, 14, 9, 1),
+        )
+    )
+    monkeypatch.setattr(
+        poll_loop,
+        "run_polling_cycle",
+        lambda settings, store: poll_loop.PollCycleResult(completed=True, mail_sent=False),
+    )
+    monkeypatch.setattr(
+        poll_loop,
+        "send_html_email",
+        lambda smtp, html, *, subject: sent.append(subject),
+    )
+
+    with pytest.raises(RuntimeError, match="stop test loop"):
+        poll_loop.poll_forever(
+            settings,
+            object(),
+            sleep=lambda seconds: (_ for _ in ()).throw(RuntimeError("stop test loop")),
+            now=lambda: next(timestamps),
+        )
+
     assert sent == [poll_loop.SUMMARY_SUBJECT]
-    assert expected_hour in poll_loop.SUMMARY_HOURS
 
 
 def test_poll_forever_does_not_send_summary_before_nine(
@@ -332,3 +361,14 @@ def test_poll_forever_does_not_send_summary_before_nine(
         )
 
     assert sent == []
+
+
+def test_due_summary_slot_is_not_repeated_after_successful_send() -> None:
+    sent_slot = (datetime(2026, 7, 14).date(), 9)
+
+    due_slot = poll_loop._due_summary_slot(
+        datetime(2026, 7, 14, 9, 15),
+        sent_slot,
+    )
+
+    assert due_slot is None

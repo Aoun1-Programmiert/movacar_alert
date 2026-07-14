@@ -10,6 +10,7 @@ import time
 
 from src.api.api_client import ApiClientError, fetch_offers
 from src.config.settings import Settings
+from src.config.timezone import LOCAL_TIMEZONE
 from src.mailer.smtp_mailer import SmtpSendError, send_html_email
 from src.mailer.templates import render_offer_email, render_offer_summary_email
 from src.matcher.offer_matcher import calculate_delta
@@ -117,8 +118,8 @@ def poll_forever(
 ) -> None:
     """Run polling cycles indefinitely at the configured interval."""
     interval_seconds = settings.poll_interval_minutes * 60
-    clock = datetime.now if now is None else now
-    last_summary_slot: tuple[date, int] | None = None
+    clock = (lambda: datetime.now(LOCAL_TIMEZONE)) if now is None else now
+    last_summary_slot = _latest_summary_slot(_local_now(clock()))
     while True:
         result = run_polling_cycle(settings, store)
         if result.completed:
@@ -177,20 +178,27 @@ def _due_summary_slot(
     """Return the latest local summary slot that is due and not yet sent."""
 
     local_now = _local_now(now)
-    due_slots = [
-        (local_now.date(), hour)
-        for hour in SUMMARY_HOURS
-        if local_now.time() >= datetime_time(hour)
-    ]
-    if due_slots and due_slots[-1] != last_summary_slot:
-        return due_slots[-1]
-    return last_summary_slot
+    latest_slot = _latest_summary_slot(local_now)
+    if latest_slot is not None and latest_slot != last_summary_slot:
+        return latest_slot
+    return None
+
+
+def _latest_summary_slot(now: datetime) -> tuple[date, int] | None:
+    """Return the most recent summary slot reached at the given local time."""
+
+    local_now = _local_now(now)
+    reached_hours = (hour for hour in SUMMARY_HOURS if local_now.time() >= datetime_time(hour))
+    latest_hour = next(reversed(tuple(reached_hours)), None)
+    if latest_hour is None:
+        return None
+    return local_now.date(), latest_hour
 
 
 def _local_now(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
-        return value.astimezone()
-    return value.astimezone()
+        return value.replace(tzinfo=LOCAL_TIMEZONE)
+    return value.astimezone(LOCAL_TIMEZONE)
 
 
 def _with_local_dates(offers: Iterable[Offer]) -> tuple[Offer, ...]:
@@ -204,8 +212,8 @@ def _with_local_dates(offers: Iterable[Offer]) -> tuple[Offer, ...]:
         converted.append(
             Offer(
                 id=offer.id,
-                start_date=offer.start_date.astimezone(),
-                end_date=offer.end_date.astimezone(),
+                start_date=offer.start_date.astimezone(LOCAL_TIMEZONE),
+                end_date=offer.end_date.astimezone(LOCAL_TIMEZONE),
                 free_km=offer.free_km,
                 origin=offer.origin,
                 destination=offer.destination,
