@@ -133,11 +133,11 @@ Implementiere die zentralen In-Memory-Entitäten gemäß Contract für parser/ma
 Implementiere Schema-Init (`CREATE TABLE IF NOT EXISTS`) in `sqlite_store` gemäß Plan-Schema.
 
 **Acceptance Criteria**
-- [ ] Tabelle `offers` enthält: `id`, `start_date`, `end_date`, `origin_city`, `destination_city`, `free_km`, `first_seen_timestamp`.
-- [ ] Soft-Delete-Felder sind enthalten: `is_deleted` (BOOL/INTEGER, Default `0`) und `deleted_at` (TEXT, nullable, ISO-8601).
-- [ ] Primärschlüssel auf `id` ist gesetzt.
-- [ ] Initialisierung ist idempotent.
-- [ ] Unit-Tests prüfen Schema und Idempotenz.
+- [x] Tabelle `offers` enthält: `id`, `start_date`, `end_date`, `origin_city`, `destination_city`, `free_km`, `first_seen_timestamp`.
+- [x] Soft-Delete-Felder sind enthalten: `is_deleted` (BOOL/INTEGER, Default `0`) und `deleted_at` (TEXT, nullable, ISO-8601).
+- [x] Primärschlüssel auf `id` ist gesetzt.
+- [x] Initialisierung ist idempotent.
+- [x] Unit-Tests prüfen Schema und Idempotenz.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/storage/sqlite_store.py`
