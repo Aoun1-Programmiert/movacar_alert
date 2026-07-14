@@ -52,10 +52,10 @@ Lege die in Plan v1.1 definierte `src/`-Struktur an und setze klare Modulgrenzen
 Setze die Abhängigkeitsstrategie gemäß Plan verbindlich um (`venv` + `requirements.txt`) und dokumentiere/etabliere reproduzierbare Installation.
 
 **Acceptance Criteria**
-- [ ] `requirements.txt` ist vorhanden und enthält nur benötigte Abhängigkeiten.
-- [ ] Projekt läuft mit Python-`venv` reproduzierbar.
-- [ ] Keine unnötige zusätzliche Toolchain eingeführt.
-- [ ] Tests/Projekt-Setup funktionieren in frischer Umgebung.
+- [x] `requirements.txt` ist vorhanden und enthält nur benötigte Abhängigkeiten.
+- [x] Projekt läuft mit Python-`venv` reproduzierbar.
+- [x] Keine unnötige zusätzliche Toolchain eingeführt.
+- [x] Tests/Projekt-Setup funktionieren in frischer Umgebung.
 
 **Betroffene Dateien / Module / Pfade**
 - `requirements.txt`
