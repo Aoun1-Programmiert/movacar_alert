@@ -134,6 +134,7 @@ Implementiere Schema-Init (`CREATE TABLE IF NOT EXISTS`) in `sqlite_store` gemä
 
 **Acceptance Criteria**
 - [ ] Tabelle `offers` enthält: `id`, `start_date`, `end_date`, `origin_city`, `destination_city`, `free_km`, `first_seen_timestamp`.
+- [ ] Soft-Delete-Felder sind enthalten: `is_deleted` (BOOL/INTEGER, Default `0`) und `deleted_at` (TEXT, nullable, ISO-8601).
 - [ ] Primärschlüssel auf `id` ist gesetzt.
 - [ ] Initialisierung ist idempotent.
 - [ ] Unit-Tests prüfen Schema und Idempotenz.
@@ -157,14 +158,17 @@ Implementiere Schema-Init (`CREATE TABLE IF NOT EXISTS`) in `sqlite_store` gemä
 ## T-DB-02 — Storage-Operationen (read/insert/cleanup) implementieren
 
 **Beschreibung**  
-Implementiere Lesen bekannter Angebote, Schreiben neuer Angebote und Bereinigung entfernter IDs.
+Implementiere Lesen bekannter Angebote, Schreiben neuer Angebote und Soft-Delete-Markierung entfernter IDs.
 
 **Acceptance Criteria**
 - [ ] Read liefert nutzbaren Zustand für Delta-Berechnung.
 - [ ] Insert schreibt nur valide Angebote in alle erforderlichen Spalten.
-- [ ] Cleanup entfernt nicht mehr aktive IDs.
+- [ ] Entfernte IDs werden **nicht physisch gelöscht**, sondern auf `is_deleted=1` gesetzt und mit `deleted_at` (lokale Zeit, ISO-8601) markiert.
+- [ ] Falls ein soft-gelöschtes Angebot wieder in der API erscheint, wird es reaktiviert (`is_deleted=0`, `deleted_at=NULL`).
 - [ ] Fehlerfälle werden explizit signalisiert (nicht still geschluckt).
 - [ ] Unit-Tests decken Read/Insert/Cleanup inkl. Fehlerfälle ab.
+- [ ] Bei kritischen DB-Fehlern läuft der Prozess kontrolliert weiter: Fehler loggen, aktuellen Zyklus abbrechen, nächsten Zyklus regulär starten.
+- [ ] Tests validieren das Verhalten „kontrolliertes Weiterlaufen“ bei kritischen DB-Fehlern.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/storage/sqlite_store.py`
@@ -183,6 +187,33 @@ Implementiere Lesen bekannter Angebote, Schreiben neuer Angebote und Bereinigung
 
 ---
 
+## T-DB-03 — Retention-Purge für Soft-Deletes (14 Tage) implementieren
+
+**Beschreibung**  
+Implementiere eine Storage-Funktion, die soft-gelöschte Angebote nach Ablauf von 14 Tagen endgültig aus der DB entfernt.
+
+**Acceptance Criteria**
+- [ ] Hard-Delete greift nur für Datensätze mit `is_deleted=1` und `deleted_at < (now - 14 Tage)`.
+- [ ] Purge ist idempotent und kann pro Zyklus sicher aufgerufen werden.
+- [ ] Zeitvergleich nutzt lokale Zeitbasis konsistent zur restlichen Zeitzonenentscheidung.
+- [ ] Unit-Tests decken Fälle „jünger als 14 Tage“, „älter als 14 Tage“ und Grenzzeitpunkt ab.
+
+**Betroffene Dateien / Module / Pfade**
+- `src/storage/sqlite_store.py`
+- `tests/test_sqlite_store_retention.py`
+
+**Abhängigkeiten**
+- T-DB-02
+
+**Ausführung**
+- **Sequenziell** nach T-DB-02
+
+**Referenzen**
+- Plan: Abschnitt 5 (`storage`), 8 (Cleanup-Schritt erweitert)
+- Spec: Abschnitt 4 (Löschlogik, hier als bewusste Erweiterung via Soft-Delete)
+
+---
+
 ## T-API-01 — API-Client für HTTP-GET inkl. Timeout/Fehlerpfade implementieren
 
 **Beschreibung**  
@@ -193,6 +224,8 @@ Implementiere `src/api/api_client.py` für API-Abruf mit konfigurierbarem Timeou
 - [ ] Erfolgsfall liefert Roh-JSON.
 - [ ] Netzwerk-/Timeout-/Strukturfehler werden explizit signalisiert.
 - [ ] Unit-Tests decken Erfolgs- und Fehlerpfade ab.
+- [ ] Timeout-/Retry-/Backoff sind verbindlich umgesetzt: **15s Timeout, 3 Retries, exponentieller Backoff 1s/2s/4s**.
+- [ ] Tests validieren die konfigurierte Retry-/Backoff-Strategie.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/api/api_client.py`
@@ -307,6 +340,7 @@ Implementiere Mail-Templates mit Sektionen „neu“ und „bestehend“ sowie k
 - [ ] Highlight-Angebote sind deutlich hervorgehoben.
 - [ ] Renderer verarbeitet bereits klassifizierte Daten, ohne Fachentscheidungen zu treffen.
 - [ ] Tests validieren Struktur, Sektionen und Highlight-Output.
+- [ ] **Open-Item-Vermerk:** Finale Mail-Struktur/Markierungsstil wird in diesem Task festgelegt und als Test-Oracle abgesichert.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/mailer/templates.py`
@@ -334,6 +368,7 @@ Implementiere SMTP-Transport in `smtp_mailer.py` mit klaren Erfolgs-/Fehlersigna
 - [ ] Versand-Erfolg und Versand-Fehler sind eindeutig unterscheidbar.
 - [ ] Fehler werden nicht als Erfolg maskiert.
 - [ ] Unit-Tests decken Erfolg, Auth-/Connect-/Transportfehler ab.
+- [ ] **Open-Item-Vermerk:** Exakte SMTP-Transportparameter (STARTTLS/SSL/Port) werden in diesem Task final entschieden und dokumentiert.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/mailer/smtp_mailer.py`
@@ -360,8 +395,10 @@ Implementiere strukturiertes JSON-Logging inkl. Pflichtfelder und Event-Typen ge
 - [ ] Pflichtfelder: `timestamp`, `level`, `event`, `cycle_id`, `message`.
 - [ ] Level `INFO/WARN/ERROR` konsistent.
 - [ ] Wichtige Events abdeckbar (Cycle Start/Ende, API, Delta, Mail, DB).
-- [ ] stdout als Default, optional Datei-Output anschließbar.
+- [ ] Logging erfolgt primär in eine Datei.
+- [ ] Log-Rotation ist implementiert mit **10 MB pro Datei** und **5 Backups**.
 - [ ] Tests validieren Feldschema und Event-Konsistenz.
+- [ ] Tests validieren Datei-Logging inkl. Rotation.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/logging/logger.py`
@@ -386,10 +423,11 @@ Implementiere den vollständigen Zyklusfluss inkl. Branching, Persistenzregel un
 
 **Acceptance Criteria**
 - [ ] Reihenfolge entspricht Plan-Workflow.
-- [ ] Kein Mailversand bei `new == 0`; nur Cleanup.
+- [ ] Kein Mailversand bei `new == 0`; Soft-Delete-Markierung entfernter IDs + Retention-Purge werden dennoch ausgeführt.
 - [ ] Bei `new > 0`: erst Mailversand, dann Persistenz neuer IDs.
 - [ ] Bei SMTP-Fehler: keine Persistenz neuer IDs.
 - [ ] API-/Parsing-Fehler führen zu Logging + Fortsetzung nächster Zyklen.
+- [ ] Datumsvergleiche folgen der festgelegten lokalen Zeitzone (nicht UTC).
 - [ ] Tests decken zentrale Zweige und Fehlerpfade ab.
 
 **Betroffene Dateien / Module / Pfade**
@@ -398,6 +436,7 @@ Implementiere den vollständigen Zyklusfluss inkl. Branching, Persistenzregel un
 
 **Abhängigkeiten**
 - T-DB-02
+- T-DB-03
 - T-API-01
 - T-PARSER-01
 - T-MATCH-02
@@ -451,7 +490,8 @@ Erstelle Integrationsszenarien, die die Kern-Garantien des Systems Ende-zu-Ende 
 **Acceptance Criteria**
 - [ ] Neues Angebot: genau ein Mailversand, danach DB-Persistenz.
 - [ ] Bereits bekanntes Angebot: keine „neu“-Benachrichtigung.
-- [ ] Entfernte IDs: werden aus DB bereinigt.
+- [ ] Entfernte IDs: werden zunächst soft-gelöscht (`is_deleted=1`, `deleted_at` gesetzt).
+- [ ] Soft-gelöschte IDs werden nach >14 Tagen endgültig aus DB entfernt.
 - [ ] SMTP-Fehler: neue IDs bleiben unpersistiert.
 - [ ] Tests basieren auf `tests/example_response.json` (+ gezielte Variationen).
 
@@ -473,14 +513,16 @@ Erstelle Integrationsszenarien, die die Kern-Garantien des Systems Ende-zu-Ende 
 
 ## Open Items / mögliche Konflikte
 
-### Open Items (aus Plan v1.1, nicht implizit entschieden)
-1. SMTP-Transportparameter (STARTTLS/SSL, Standard-Port).
-2. Präzise HTML-Mail-Struktur und Highlight-Stil.
-3. Konkrete Timeout-/Retry-/Backoff-Werte.
-4. Zeitzonenpolitik für Datumsvergleich (`UTC` vs lokal).
-5. Verhalten bei kritischen DB-Fehlern (fail-fast vs kontrolliertes Weiterlaufen).
-6. Log-Rotation bei Datei-Logging.
+### Open Items (Status nach Abstimmung)
+1. **SMTP-Transportparameter:** wird in **T-MAIL-02** final festgelegt.
+2. **Mail-Struktur/Highlight-Stil:** wird in **T-MAIL-01** final festgelegt.
+3. **Timeout-/Retry-/Backoff-Werte:** **entschieden = 15s, 3 Retries, exponentiell 1s/2s/4s** (in **T-API-01** umzusetzen).
+4. **Zeitzonenpolitik:** **entschieden = lokal**.
+5. **DB-Fehlerstrategie (kritisch):** **entschieden = kontrolliertes Weiterlaufen** (in **T-DB-02/T-LOOP-01** umzusetzen).
+6. **Datei-Logging mit Rotation:** **entschieden = 10 MB, 5 Backups** (in **T-LOG-01** umzusetzen).
 
 ### Mögliche Spec/Plan-Spannung
 - **DB-Schema:** `plan_v1.1` enthält zusätzlich `free_km`; `spec_v1.0` nennt ein minimales Schema ohne `free_km`.  
   Bewertung: **kein direkter Widerspruch**, aber als bewusste Plan-Erweiterung kenntlich.
+- **Löschsemantik:** `spec_v1.0`/`plan_v1.1` beschreiben direkte Bereinigung entfernter IDs; in `tasks_v1.1` wurde dies bewusst zu Soft-Delete + 14-Tage-Retention erweitert.  
+  Bewertung: **gezielte fachliche Erweiterung**, in Implementierung konsistent umzusetzen.
