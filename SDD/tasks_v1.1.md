@@ -249,11 +249,11 @@ Implementiere `src/api/api_client.py` für API-Abruf mit konfigurierbarem Timeou
 Implementiere Parser, der `data` extrahiert, `origin`/`destination` über `included` auflöst und vollständige `Offer`-Objekte liefert.
 
 **Acceptance Criteria**
-- [ ] `id`, `start_date`, `end_date`, `free_km`, Origin/Destination werden vollständig aufgelöst.
-- [ ] Unvollständige Datensätze werden als Parsing-Fehler signalisiert.
-- [ ] Parser liefert ausschließlich valide, vollständige Offers.
-- [ ] Tests nutzen `tests/example_response.json` für den Hauptfall.
-- [ ] Zusätzliche Tests prüfen fehlende Beziehungen/Pflichtfelder.
+- [x] `id`, `start_date`, `end_date`, `free_km`, Origin/Destination werden vollständig aufgelöst.
+- [x] Unvollständige Datensätze werden als Parsing-Fehler signalisiert.
+- [x] Parser liefert ausschließlich valide, vollständige Offers.
+- [x] Tests nutzen `tests/example_response.json` für den Hauptfall.
+- [x] Zusätzliche Tests prüfen fehlende Beziehungen/Pflichtfelder.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/parser/offer_parser.py`
