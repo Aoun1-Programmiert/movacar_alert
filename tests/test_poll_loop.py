@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from src.api.api_client import ApiNetworkError
 from src.loop import poll_loop
+from src.logging.logger import configure_json_logger
 from src.mailer.smtp_mailer import SmtpTransportError
 from src.models.offer import GeoLocation, Offer
 from src.parser.offer_parser import OfferParsingError
@@ -89,6 +92,43 @@ def test_new_offers_are_mailed_before_being_persisted_and_then_cleaned(
         ("soft_delete", ("new-offer",)),
         "purge",
     ]
+
+
+def test_cycle_emits_requested_operational_events(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: SimpleNamespace,
+    offer: Offer,
+    tmp_path: Path,
+) -> None:
+    store = FakeStore()
+    _stub_response(monkeypatch, offer)
+    monkeypatch.setattr(poll_loop, "send_html_email", lambda smtp, html: None)
+    log_path = tmp_path / "movacar.log"
+    monkeypatch.setattr(
+        poll_loop,
+        "LOGGER",
+        configure_json_logger(log_path, logger_name="poll-loop-events"),
+    )
+
+    poll_loop.run_polling_cycle(settings, store)  # type: ignore[arg-type]
+
+    events = [
+        json.loads(line)
+        for line in log_path.read_text(encoding="utf-8").splitlines()
+    ]
+    event_names = [event["event"] for event in events]
+    assert event_names == [
+        "cycle_started",
+        "api_requested",
+        "api_succeeded",
+        "delta_calculated",
+        "new_offers_received",
+        "mail_sent",
+        "db_write_succeeded",
+        "db_cleanup_succeeded",
+        "cycle_completed",
+    ]
+    assert all(event["cycle_id"] == events[0]["cycle_id"] for event in events)
 
 
 def test_no_new_offers_skip_mail_but_still_cleanup_and_purge(

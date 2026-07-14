@@ -402,13 +402,13 @@ z. B. `SMTP_TO=["first@example.com","second@example.com"]`.
 Implementiere strukturiertes JSON-Logging inkl. Pflichtfelder und Event-Typen gemäß Plan.
 
 **Acceptance Criteria**
-- [ ] Pflichtfelder: `timestamp`, `level`, `event`, `cycle_id`, `message`.
-- [ ] Level `INFO/WARN/ERROR` konsistent.
-- [ ] Wichtige Events abdeckbar (Cycle Start/Ende, API, Delta, Mail, DB).
-- [ ] Logging erfolgt primär in eine Datei.
-- [ ] Log-Rotation ist implementiert mit **10 MB pro Datei** und **5 Backups**.
-- [ ] Tests validieren Feldschema und Event-Konsistenz.
-- [ ] Tests validieren Datei-Logging inkl. Rotation.
+- [x] Pflichtfelder: `timestamp`, `level`, `event`, `cycle_id`, `message`.
+- [x] Level `INFO/WARN/ERROR` konsistent.
+- [x] Wichtige Events abdeckbar (Cycle Start/Ende, API, Delta, Mail, DB).
+- [x] Logging erfolgt primär in eine Datei.
+- [x] Log-Rotation ist implementiert mit **10 MB pro Datei** und **5 Backups**.
+- [x] Tests validieren Feldschema und Event-Konsistenz.
+- [x] Tests validieren Datei-Logging inkl. Rotation.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/logging/logger.py`

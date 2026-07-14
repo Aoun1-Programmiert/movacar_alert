@@ -12,7 +12,7 @@ from src.config.settings import SettingsValidationError
 def test_main_loads_settings_initializes_schema_then_starts_polling(
     monkeypatch,
 ) -> None:
-    settings = SimpleNamespace(sqlite_path=Path("offers.sqlite"))
+    settings = SimpleNamespace(sqlite_path=Path("offers.sqlite"), log_file_path=None)
     calls: list[object] = []
 
     class FakeStore:
@@ -23,6 +23,11 @@ def test_main_loads_settings_initializes_schema_then_starts_polling(
             calls.append("initialize_schema")
 
     monkeypatch.setattr(app_main, "load_settings", lambda: settings)
+    monkeypatch.setattr(
+        app_main,
+        "configure_json_logger",
+        lambda log_file_path: calls.append(("logger", log_file_path)),
+    )
     monkeypatch.setattr(app_main, "SQLiteStore", FakeStore)
     monkeypatch.setattr(
         app_main,
@@ -31,8 +36,12 @@ def test_main_loads_settings_initializes_schema_then_starts_polling(
     )
 
     assert app_main.main() == 0
-    assert calls[0:2] == [("store", Path("offers.sqlite")), "initialize_schema"]
-    assert calls[2][0:2] == ("poll", settings)
+    assert calls[0:3] == [
+        ("logger", None),
+        ("store", Path("offers.sqlite")),
+        "initialize_schema",
+    ]
+    assert calls[3][0:2] == ("poll", settings)
 
 
 def test_main_reports_configuration_errors_and_does_not_start(
