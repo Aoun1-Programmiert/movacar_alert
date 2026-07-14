@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from src.models.offer import GeoLocation, Offer
@@ -151,6 +151,12 @@ def _require_number(container: Mapping[str, Any], key: str, context: str) -> flo
 
 def _parse_datetime(value: str, context: str) -> datetime:
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as error:
         raise OfferParsingError(f"{context} must be an ISO-8601 datetime.") from error
+
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise OfferParsingError(
+            f"{context} must include a UTC designator or numeric UTC offset."
+        )
+    return parsed.astimezone(timezone.utc)

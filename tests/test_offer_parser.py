@@ -41,6 +41,54 @@ def test_parse_offers_resolves_complete_offers_from_example_response(
     assert first_offer.destination.longitude == 2.39253
 
 
+def test_parse_offers_normalizes_offset_dates_to_utc(
+    example_response: dict[str, object],
+) -> None:
+    response = copy.deepcopy(example_response)
+    attributes = response["data"][0]["attributes"]
+    attributes["start_date"] = "2026-07-20T06:00:00+02:00"
+    attributes["end_date"] = "2026-07-26T14:00:00-05:00"
+
+    offer = parse_offers(response)[0]
+
+    assert offer.start_date == datetime(2026, 7, 20, 4, tzinfo=timezone.utc)
+    assert offer.end_date == datetime(2026, 7, 26, 19, tzinfo=timezone.utc)
+    assert offer.start_date.tzinfo is timezone.utc
+    assert offer.end_date.tzinfo is timezone.utc
+
+
+def test_parse_offers_normalizes_mixed_utc_and_offset_dates_to_utc(
+    example_response: dict[str, object],
+) -> None:
+    response = copy.deepcopy(example_response)
+    response["data"][0]["attributes"]["end_date"] = "2026-07-26T21:00:00+02:00"
+
+    offer = parse_offers(response)[0]
+
+    assert offer.start_date.tzinfo is timezone.utc
+    assert offer.end_date == datetime(2026, 7, 26, 19, tzinfo=timezone.utc)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    (
+        ("start_date", "2026-07-20T04:00:00", "UTC designator or numeric UTC offset"),
+        ("end_date", "2026-07-26T19:00:00+25:00", "ISO-8601 datetime"),
+    ),
+)
+def test_parse_offers_rejects_naive_or_invalid_timezone_dates(
+    example_response: dict[str, object],
+    field: str,
+    value: str,
+    message: str,
+) -> None:
+    response = copy.deepcopy(example_response)
+    response["data"][0]["attributes"][field] = value
+
+    with pytest.raises(OfferParsingError, match=message):
+        parse_offers(response)
+
+
 @pytest.mark.parametrize(
     ("mutation", "message"),
     (
