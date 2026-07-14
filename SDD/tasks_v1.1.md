@@ -220,12 +220,12 @@ Implementiere eine Storage-Funktion, die soft-gelöschte Angebote nach Ablauf vo
 Implementiere `src/api/api_client.py` für API-Abruf mit konfigurierbarem Timeout und klaren Fehlersignalen.
 
 **Acceptance Criteria**
-- [ ] API-GET nutzt URL + Timeout aus Settings.
-- [ ] Erfolgsfall liefert Roh-JSON.
-- [ ] Netzwerk-/Timeout-/Strukturfehler werden explizit signalisiert.
-- [ ] Unit-Tests decken Erfolgs- und Fehlerpfade ab.
-- [ ] Timeout-/Retry-/Backoff sind verbindlich umgesetzt: **15s Timeout, 3 Retries, exponentieller Backoff 1s/2s/4s**.
-- [ ] Tests validieren die konfigurierte Retry-/Backoff-Strategie.
+- [x] API-GET nutzt URL + Timeout aus Settings.
+- [x] Erfolgsfall liefert Roh-JSON.
+- [x] Netzwerk-/Timeout-/Strukturfehler werden explizit signalisiert.
+- [x] Unit-Tests decken Erfolgs- und Fehlerpfade ab.
+- [x] Timeout-/Retry-/Backoff sind verbindlich umgesetzt: **15s Timeout, 3 Retries, exponentieller Backoff 1s/2s/4s**.
+- [x] Tests validieren die konfigurierte Retry-/Backoff-Strategie.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/api/api_client.py`
