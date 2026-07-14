@@ -37,6 +37,7 @@ def render_offer_email(
     .offer--highlight {{ background: #fff3cd; border: 3px solid #d39e00; }}
     .highlight-label {{ color: #7a4f00; font-weight: bold; }}
     .empty-section {{ color: #666; font-style: italic; }}
+    .update-label {{ color: #555; font-weight: bold; }}
   </style>
 </head>
 <body>
@@ -71,7 +72,8 @@ def render_offer_summary_email(offers: Iterable[ClassifiedOffer]) -> str:
   </style>
 </head>
 <body>
-  <h1>Aktuelle Movacar-Angebote</h1>
+  <h1>Aktuelles Update</h1>
+  <p class="update-label">Aktuelle Movacar-Angebote</p>
   {_render_section("current-offers", "Aktuelle Angebote", current)}
 </body>
 </html>

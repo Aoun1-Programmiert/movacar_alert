@@ -10,7 +10,7 @@ from typing import Final
 from src.config.settings import SmtpSettings
 
 
-DEFAULT_SUBJECT: Final = "Movacar-Angebotsupdate"
+DEFAULT_SUBJECT: Final = "Neue Angebote bei Movacar gefunden"
 
 
 class SmtpSendError(RuntimeError):

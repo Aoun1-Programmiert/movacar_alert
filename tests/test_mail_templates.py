@@ -111,6 +111,7 @@ def test_summary_renderer_contains_all_current_offers() -> None:
         ]
     )
 
+    assert "<h1>Aktuelles Update</h1>" in html
     assert "Aktuelle Movacar-Angebote" in html
     assert html.count('data-offer-id="current-') == 2
     assert 'data-offer-id="current-1"' in html

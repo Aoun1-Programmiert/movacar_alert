@@ -20,7 +20,7 @@ from src.storage.sqlite_store import SQLiteStore, SQLiteStoreError
 
 LOGGER = logging.getLogger("movacar_alert.loop.poll_loop")
 SUMMARY_HOURS = (9, 21)
-SUMMARY_SUBJECT = "Movacar-Angebotsübersicht"
+SUMMARY_SUBJECT = "Regelmäßiges Update - Aktuelle Angebote"
 
 
 @dataclass(frozen=True)
