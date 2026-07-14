@@ -193,10 +193,10 @@ Implementiere Lesen bekannter Angebote, Schreiben neuer Angebote und Soft-Delete
 Implementiere eine Storage-Funktion, die soft-gelöschte Angebote nach Ablauf von 14 Tagen endgültig aus der DB entfernt.
 
 **Acceptance Criteria**
-- [ ] Hard-Delete greift nur für Datensätze mit `is_deleted=1` und `deleted_at < (now - 14 Tage)`.
-- [ ] Purge ist idempotent und kann pro Zyklus sicher aufgerufen werden.
-- [ ] Zeitvergleich nutzt lokale Zeitbasis konsistent zur restlichen Zeitzonenentscheidung.
-- [ ] Unit-Tests decken Fälle „jünger als 14 Tage“, „älter als 14 Tage“ und Grenzzeitpunkt ab.
+- [x] Hard-Delete greift nur für Datensätze mit `is_deleted=1` und `deleted_at < (now - 14 Tage)`.
+- [x] Purge ist idempotent und kann pro Zyklus sicher aufgerufen werden.
+- [x] Zeitvergleich nutzt lokale Zeitbasis konsistent zur restlichen Zeitzonenentscheidung.
+- [x] Unit-Tests decken Fälle „jünger als 14 Tage“, „älter als 14 Tage“ und Grenzzeitpunkt ab.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/storage/sqlite_store.py`

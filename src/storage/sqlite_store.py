@@ -6,7 +6,7 @@ from collections.abc import Iterable
 import logging
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from src.models.offer import Offer
@@ -171,5 +171,27 @@ class SQLiteStore:
         except sqlite3.Error as exc:
             LOGGER.error("SQLite offer cleanup failed: %s", exc)
             raise SQLiteStoreError("Could not soft-delete removed offers.") from exc
+
+        return cursor.rowcount
+
+    def purge_soft_deleted_offers(self, *, now: datetime | None = None) -> int:
+        """Permanently remove soft-deleted offers older than 14 local days."""
+
+        reference_time = datetime.now().astimezone() if now is None else now.astimezone()
+        cutoff = reference_time - timedelta(days=14)
+        try:
+            with sqlite3.connect(self.database_path) as connection:
+                cursor = connection.execute(
+                    """
+                    DELETE FROM offers
+                    WHERE is_deleted = 1
+                      AND deleted_at IS NOT NULL
+                      AND datetime(deleted_at) < datetime(?)
+                    """,
+                    (cutoff.isoformat(),),
+                )
+        except sqlite3.Error as exc:
+            LOGGER.error("SQLite soft-delete purge failed: %s", exc)
+            raise SQLiteStoreError("Could not purge expired soft-deleted offers.") from exc
 
         return cursor.rowcount
