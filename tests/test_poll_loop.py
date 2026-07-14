@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,7 +10,7 @@ import pytest
 
 from src.api.api_client import ApiNetworkError
 from src.loop import poll_loop
-from src.logging.logger import configure_json_logger
+from src.logging.logger import configure_logger
 from src.mailer.smtp_mailer import SmtpTransportError
 from src.models.offer import GeoLocation, Offer
 from src.parser.offer_parser import OfferParsingError
@@ -94,41 +93,35 @@ def test_new_offers_are_mailed_before_being_persisted_and_then_cleaned(
     ]
 
 
-def test_cycle_emits_requested_operational_events(
+def test_successful_cycle_logs_summary_before_sleep(
     monkeypatch: pytest.MonkeyPatch,
     settings: SimpleNamespace,
-    offer: Offer,
     tmp_path: Path,
 ) -> None:
-    store = FakeStore()
-    _stub_response(monkeypatch, offer)
-    monkeypatch.setattr(poll_loop, "send_html_email", lambda smtp, html: None)
     log_path = tmp_path / "movacar.log"
     monkeypatch.setattr(
         poll_loop,
         "LOGGER",
-        configure_json_logger(log_path, logger_name="poll-loop-events"),
+        configure_logger(log_path, logger_name="movacar_alert.loop.poll_loop"),
+    )
+    monkeypatch.setattr(
+        poll_loop,
+        "run_polling_cycle",
+        lambda settings, store: poll_loop.PollCycleResult(
+            completed=True, mail_sent=True, new_count=2
+        ),
     )
 
-    poll_loop.run_polling_cycle(settings, store)  # type: ignore[arg-type]
+    with pytest.raises(RuntimeError, match="stop test loop"):
+        poll_loop.poll_forever(
+            settings,
+            object(),
+            sleep=lambda seconds: (_ for _ in ()).throw(RuntimeError("stop test loop")),
+        )
 
-    events = [
-        json.loads(line)
-        for line in log_path.read_text(encoding="utf-8").splitlines()
-    ]
-    event_names = [event["event"] for event in events]
-    assert event_names == [
-        "cycle_started",
-        "api_requested",
-        "api_succeeded",
-        "delta_calculated",
-        "new_offers_received",
-        "mail_sent",
-        "db_write_succeeded",
-        "db_cleanup_succeeded",
-        "cycle_completed",
-    ]
-    assert all(event["cycle_id"] == events[0]["cycle_id"] for event in events)
+    log_line = log_path.read_text(encoding="utf-8")
+    assert "INFO — Erfolgreicher Polling-Durchlauf: 2 neue Angebote gesichtet;" in log_line
+    assert "eine E-Mail versendet. Nächster Durchlauf um " in log_line
 
 
 def test_no_new_offers_skip_mail_but_still_cleanup_and_purge(
@@ -256,14 +249,11 @@ def test_poll_forever_sleeps_for_configured_interval(
 ) -> None:
     calls: list[object] = []
 
-    def run_cycle(
-        settings: SimpleNamespace, store: object, *, cycle_id: str
-    ) -> poll_loop.PollCycleResult:
-        calls.append(("cycle", cycle_id))
+    def run_cycle(settings: SimpleNamespace, store: object) -> poll_loop.PollCycleResult:
+        calls.append("cycle")
         return poll_loop.PollCycleResult(completed=True, mail_sent=False)
 
     monkeypatch.setattr(poll_loop, "run_polling_cycle", run_cycle)
-    monkeypatch.setattr(poll_loop, "log_event", lambda *args, **kwargs: calls.append(kwargs))
 
     def stop_after_first_sleep(seconds: float) -> None:
         calls.append(seconds)
@@ -272,8 +262,4 @@ def test_poll_forever_sleeps_for_configured_interval(
     with pytest.raises(RuntimeError, match="stop test loop"):
         poll_loop.poll_forever(settings, object(), sleep=stop_after_first_sleep)  # type: ignore[arg-type]
 
-    assert calls[0][0] == "cycle"
-    assert calls[1]["event"].value == "cycle_waiting"
-    assert calls[1]["cycle_id"] == calls[0][1]
-    assert calls[1]["data"]["sleep_seconds"] == 900
-    assert calls[2] == 900
+    assert calls == ["cycle", 900]

@@ -16,7 +16,7 @@ from src.config.settings import Settings
 HTTP_RETRY_DELAYS_SECONDS = (1, 2, 4)
 MAX_RETRIES = len(HTTP_RETRY_DELAYS_SECONDS)
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("movacar_alert.api.api_client")
 
 
 class ApiClientError(RuntimeError):

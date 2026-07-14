@@ -25,7 +25,7 @@ def test_main_loads_settings_initializes_schema_then_starts_polling(
     monkeypatch.setattr(app_main, "load_settings", lambda: settings)
     monkeypatch.setattr(
         app_main,
-        "configure_json_logger",
+        "configure_logger",
         lambda log_file_path: calls.append(("logger", log_file_path)),
     )
     monkeypatch.setattr(app_main, "SQLiteStore", FakeStore)

@@ -11,7 +11,7 @@ from pathlib import Path
 
 from src.models.offer import Offer
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = logging.getLogger("movacar_alert.storage.sqlite_store")
 
 
 class SQLiteStoreError(RuntimeError):

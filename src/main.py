@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 
 from src.config.settings import SettingsValidationError, load_settings
-from src.logging.logger import configure_json_logger
+from src.logging.logger import configure_logger
 from src.loop.poll_loop import poll_forever
 from src.storage.sqlite_store import SQLiteStore
 
@@ -18,7 +18,7 @@ def main() -> int:
         print(f"Configuration error: {error}", file=sys.stderr)
         return 2
 
-    configure_json_logger(settings.log_file_path)
+    configure_logger(settings.log_file_path)
     store = SQLiteStore(settings.sqlite_path)
     store.initialize_schema()
     poll_forever(settings, store)
