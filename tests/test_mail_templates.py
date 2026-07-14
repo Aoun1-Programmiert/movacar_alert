@@ -64,6 +64,17 @@ def test_non_highlighted_offer_has_no_highlight_output() -> None:
     assert '<div class="highlight-label"' not in html
 
 
+def test_renderer_formats_offer_dates_without_times() -> None:
+    html = render_offer_email(
+        [make_classified("dated", state="new", is_highlighted=False)],
+        [],
+    )
+
+    assert "Zeitraum: 14-07-2026 bis 16-07-2026" in html
+    assert "2026-07-14T08:00:00" not in html
+    assert "2026-07-16T08:00:00" not in html
+
+
 def test_renderer_escapes_offer_content_and_renders_empty_sections() -> None:
     html = render_offer_email(
         [make_classified('<new&1>', state="new", is_highlighted=False, origin_city="<Berlin>")],

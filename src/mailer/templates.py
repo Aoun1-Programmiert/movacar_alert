@@ -91,6 +91,6 @@ def _render_offer(offer: ClassifiedOffer) -> str:
     return f"""    <li class="offer{highlight_class}" data-offer-id="{escape(offer.id, quote=True)}">
       {highlight_label}
       <strong>{escape(offer.origin.city)} &rarr; {escape(offer.destination.city)}</strong>
-      <div>Zeitraum: {escape(offer.start_date.isoformat())} bis {escape(offer.end_date.isoformat())}</div>
+      <div>Zeitraum: {offer.start_date.strftime("%d-%m-%Y")} bis {offer.end_date.strftime("%d-%m-%Y")}</div>
       <div>Freikilometer: {offer.free_km}</div>
     </li>"""
