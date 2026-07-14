@@ -28,6 +28,7 @@ def _read_events(log_path: Path) -> list[dict[str, object]]:
     (
         (EventName.CYCLE_STARTED, "INFO"),
         (EventName.CYCLE_COMPLETED, "INFO"),
+        (EventName.CYCLE_WAITING, "INFO"),
         (EventName.API_REQUESTED, "INFO"),
         (EventName.API_SUCCEEDED, "INFO"),
         (EventName.API_FAILED, "ERROR"),
@@ -65,6 +66,7 @@ def test_logger_writes_contract_compliant_events_to_file_and_stdout(
     assert set(REQUIRED_EVENT_FIELDS).issubset(file_event)
     assert file_event == stdout_event
     assert file_event["level"] == level
+    assert file_event["module"] == f"logger-contract-{event}"
     assert file_event["event"] == event
     assert file_event["cycle_id"] == "cycle-42"
     assert file_event["message"] == "Operational event recorded."

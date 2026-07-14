@@ -256,7 +256,14 @@ def test_poll_forever_sleeps_for_configured_interval(
 ) -> None:
     calls: list[object] = []
 
-    monkeypatch.setattr(poll_loop, "run_polling_cycle", lambda settings, store: calls.append("cycle"))
+    def run_cycle(
+        settings: SimpleNamespace, store: object, *, cycle_id: str
+    ) -> poll_loop.PollCycleResult:
+        calls.append(("cycle", cycle_id))
+        return poll_loop.PollCycleResult(completed=True, mail_sent=False)
+
+    monkeypatch.setattr(poll_loop, "run_polling_cycle", run_cycle)
+    monkeypatch.setattr(poll_loop, "log_event", lambda *args, **kwargs: calls.append(kwargs))
 
     def stop_after_first_sleep(seconds: float) -> None:
         calls.append(seconds)
@@ -265,4 +272,8 @@ def test_poll_forever_sleeps_for_configured_interval(
     with pytest.raises(RuntimeError, match="stop test loop"):
         poll_loop.poll_forever(settings, object(), sleep=stop_after_first_sleep)  # type: ignore[arg-type]
 
-    assert calls == ["cycle", 900]
+    assert calls[0][0] == "cycle"
+    assert calls[1]["event"].value == "cycle_waiting"
+    assert calls[1]["cycle_id"] == calls[0][1]
+    assert calls[1]["data"]["sleep_seconds"] == 900
+    assert calls[2] == 900

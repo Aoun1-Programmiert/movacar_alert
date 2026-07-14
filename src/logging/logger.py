@@ -14,7 +14,14 @@ from typing import Any, Final, Mapping
 
 LOG_MAX_BYTES: Final = 10 * 1024 * 1024
 LOG_BACKUP_COUNT: Final = 5
-REQUIRED_EVENT_FIELDS: Final = ("timestamp", "level", "event", "cycle_id", "message")
+REQUIRED_EVENT_FIELDS: Final = (
+    "timestamp",
+    "level",
+    "module",
+    "event",
+    "cycle_id",
+    "message",
+)
 
 
 class EventName(StrEnum):
@@ -22,6 +29,7 @@ class EventName(StrEnum):
 
     CYCLE_STARTED = "cycle_started"
     CYCLE_COMPLETED = "cycle_completed"
+    CYCLE_WAITING = "cycle_waiting"
     API_REQUESTED = "api_requested"
     API_SUCCEEDED = "api_succeeded"
     API_FAILED = "api_failed"
@@ -45,6 +53,7 @@ class JsonEventFormatter(logging.Formatter):
             .isoformat()
             .replace("+00:00", "Z"),
             "level": _level_name(record.levelno),
+            "module": record.name,
             "event": getattr(record, "event", "unclassified"),
             "cycle_id": getattr(record, "cycle_id", "unclassified"),
             "message": record.getMessage(),

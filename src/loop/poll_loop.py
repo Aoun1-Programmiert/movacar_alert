@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import logging
 import time
 from uuid import uuid4
@@ -20,7 +20,7 @@ from src.parser.offer_parser import OfferParsingError, parse_offers
 from src.storage.sqlite_store import SQLiteStore, SQLiteStoreError
 
 
-LOGGER = logging.getLogger("movacar_alert")
+LOGGER = logging.getLogger("movacar_alert.loop.poll_loop")
 
 
 @dataclass(frozen=True)
@@ -34,13 +34,15 @@ class PollCycleResult:
     removed_count: int = 0
 
 
-def run_polling_cycle(settings: Settings, store: SQLiteStore) -> PollCycleResult:
+def run_polling_cycle(
+    settings: Settings, store: SQLiteStore, *, cycle_id: str | None = None
+) -> PollCycleResult:
     """Execute one complete polling cycle while handling expected operational errors.
 
     API and parsing failures leave persisted state untouched. SMTP failures do not
     persist newly discovered offers, so they are retried during the next cycle.
     """
-    cycle_id = uuid4().hex
+    cycle_id = cycle_id or uuid4().hex
     log_event(
         LOGGER,
         level="INFO",
@@ -225,7 +227,21 @@ def poll_forever(
     """Run polling cycles indefinitely at the configured interval."""
     interval_seconds = settings.poll_interval_minutes * 60
     while True:
-        run_polling_cycle(settings, store)
+        cycle_id = uuid4().hex
+        result = run_polling_cycle(settings, store, cycle_id=cycle_id)
+        next_cycle_at = datetime.now(timezone.utc) + timedelta(seconds=interval_seconds)
+        log_event(
+            LOGGER,
+            level="INFO",
+            event=EventName.CYCLE_WAITING,
+            cycle_id=cycle_id,
+            message="Polling cycle finished; program is waiting for the next cycle.",
+            data={
+                "completed": result.completed,
+                "sleep_seconds": interval_seconds,
+                "next_cycle_at": next_cycle_at.isoformat().replace("+00:00", "Z"),
+            },
+        )
         sleep(interval_seconds)
 
 
