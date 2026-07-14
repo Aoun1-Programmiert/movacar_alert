@@ -79,11 +79,11 @@ Setze die Abhängigkeitsstrategie gemäß Plan verbindlich um (`venv` + `require
 Implementiere `src/config/settings.py` zum Laden/Validieren aller Konfigurationswerte inkl. Defaults und optionaler Overrides.
 
 **Acceptance Criteria**
-- [ ] Pflichtwerte (`API_URL`, SMTP-Basis, `SQLITE_PATH`) werden beim Start validiert.
-- [ ] `POLL_INTERVAL_MINUTES` defaultet auf 15.
-- [ ] BBox-Overrides sind optional; ohne Override gelten Code-Defaults.
-- [ ] Settings liegen als typisierte Runtime-Konfiguration vor.
-- [ ] Unit-Tests decken valide/invalid ENV-Konfiguration und Defaults ab.
+- [x] Pflichtwerte (`API_URL`, SMTP-Basis, `SQLITE_PATH`) werden beim Start validiert.
+- [x] `POLL_INTERVAL_MINUTES` defaultet auf 15.
+- [x] BBox-Overrides sind optional; ohne Override gelten Code-Defaults.
+- [x] Settings liegen als typisierte Runtime-Konfiguration vor.
+- [x] Unit-Tests decken valide/invalid ENV-Konfiguration und Defaults ab.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/config/settings.py`
