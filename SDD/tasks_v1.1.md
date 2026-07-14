@@ -469,10 +469,10 @@ Implementiere den vollständigen Zyklusfluss inkl. Branching, Persistenzregel un
 Implementiere den Startpunkt, der Konfiguration lädt, Storage initialisiert und die Poll-Loop kontrolliert startet.
 
 **Acceptance Criteria**
-- [ ] Startpfad initialisiert Settings und DB-Schema vor erster Polling-Runde.
-- [ ] Fehler bei Startvalidierung werden klar ausgegeben.
-- [ ] Entry bleibt schlank und delegiert Fachlogik an Module.
-- [ ] Tests prüfen Startverhalten (Happy Path + Config-Fehler).
+- [x] Startpfad initialisiert Settings und DB-Schema vor erster Polling-Runde.
+- [x] Fehler bei Startvalidierung werden klar ausgegeben.
+- [x] Entry bleibt schlank und delegiert Fachlogik an Module.
+- [x] Tests prüfen Startverhalten (Happy Path + Config-Fehler).
 
 **Betroffene Dateien / Module / Pfade**
 - `src/main.py` (oder äquivalenter Einstiegspunkt)
