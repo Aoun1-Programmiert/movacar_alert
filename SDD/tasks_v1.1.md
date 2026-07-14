@@ -279,10 +279,10 @@ Implementiere Parser, der `data` extrahiert, `origin`/`destination` über `inclu
 Implementiere dedizierte Geo-Regeln in `geo_rules.py` zur Prüfung „in DE“ / „außerhalb DE“ auf Basis Koordinaten.
 
 **Acceptance Criteria**
-- [ ] DE-BBox-Defaults werden korrekt angewendet.
-- [ ] ENV-Overrides werden berücksichtigt.
-- [ ] Grenz- und Randfälle sind determiniert getestet.
-- [ ] Unit-Tests decken positive/negative und Grenzkoordinaten ab.
+- [x] DE-BBox-Defaults werden korrekt angewendet.
+- [x] ENV-Overrides werden berücksichtigt.
+- [x] Grenz- und Randfälle sind determiniert getestet.
+- [x] Unit-Tests decken positive/negative und Grenzkoordinaten ab.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/matcher/geo_rules.py`
