@@ -307,10 +307,10 @@ Implementiere dedizierte Geo-Regeln in `geo_rules.py` zur Prüfung „in DE“ /
 Implementiere in `offer_matcher.py` die Highlight-Regel und die Delta-Klassifikation (`new`, `existing`, `removed`).
 
 **Acceptance Criteria**
-- [ ] Highlight-Regel: Dauer ≥ 2 Tage UND Origin in DE UND Destination außerhalb DE.
-- [ ] Delta korrekt für alle Zustandsübergänge.
-- [ ] Deterministisches Verhalten bei identischem Input.
-- [ ] Unit-Tests decken Highlight- und Delta-Fälle vollständig ab.
+- [x] Highlight-Regel: Dauer ≥ 2 Tage UND Origin in DE UND Destination außerhalb DE.
+- [x] Delta korrekt für alle Zustandsübergänge.
+- [x] Deterministisches Verhalten bei identischem Input.
+- [x] Unit-Tests decken Highlight- und Delta-Fälle vollständig ab.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/matcher/offer_matcher.py`
