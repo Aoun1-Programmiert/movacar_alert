@@ -3,22 +3,24 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
-from datetime import datetime, timedelta
+from dataclasses import dataclass, field
+from datetime import date, datetime, time as datetime_time, timedelta
 import logging
 import time
 
 from src.api.api_client import ApiClientError, fetch_offers
 from src.config.settings import Settings
 from src.mailer.smtp_mailer import SmtpSendError, send_html_email
-from src.mailer.templates import render_offer_email
+from src.mailer.templates import render_offer_email, render_offer_summary_email
 from src.matcher.offer_matcher import calculate_delta
-from src.models.offer import Offer
+from src.models.offer import ClassifiedOffer, Offer
 from src.parser.offer_parser import OfferParsingError, parse_offers
 from src.storage.sqlite_store import SQLiteStore, SQLiteStoreError
 
 
 LOGGER = logging.getLogger("movacar_alert.loop.poll_loop")
+SUMMARY_HOURS = (9, 21)
+SUMMARY_SUBJECT = "Movacar-Angebotsübersicht"
 
 
 @dataclass(frozen=True)
@@ -30,6 +32,7 @@ class PollCycleResult:
     new_count: int = 0
     existing_count: int = 0
     removed_count: int = 0
+    current_offers: tuple[ClassifiedOffer, ...] = field(default=(), compare=False)
 
 
 def run_polling_cycle(settings: Settings, store: SQLiteStore) -> PollCycleResult:
@@ -58,6 +61,7 @@ def run_polling_cycle(settings: Settings, store: SQLiteStore) -> PollCycleResult
         new_count=delta.new_count,
         existing_count=delta.existing_count,
         removed_count=delta.removed_count,
+        current_offers=delta.new + delta.existing,
     )
     if delta.new:
         try:
@@ -73,6 +77,7 @@ def run_polling_cycle(settings: Settings, store: SQLiteStore) -> PollCycleResult
             new_count=result.new_count,
             existing_count=result.existing_count,
             removed_count=result.removed_count,
+            current_offers=result.current_offers,
         )
         try:
             store.insert_offers(delta.new)
@@ -84,6 +89,7 @@ def run_polling_cycle(settings: Settings, store: SQLiteStore) -> PollCycleResult
                 new_count=result.new_count,
                 existing_count=result.existing_count,
                 removed_count=result.removed_count,
+                current_offers=result.current_offers,
             )
     try:
         soft_deleted = store.soft_delete_removed_offers(offer.id for offer in offers)
@@ -96,6 +102,7 @@ def run_polling_cycle(settings: Settings, store: SQLiteStore) -> PollCycleResult
             new_count=result.new_count,
             existing_count=result.existing_count,
             removed_count=result.removed_count,
+            current_offers=result.current_offers,
         )
 
     return result
@@ -106,13 +113,23 @@ def poll_forever(
     store: SQLiteStore,
     *,
     sleep: Callable[[float], None] = time.sleep,
+    now: Callable[[], datetime] | None = None,
 ) -> None:
     """Run polling cycles indefinitely at the configured interval."""
     interval_seconds = settings.poll_interval_minutes * 60
+    clock = datetime.now if now is None else now
+    last_summary_slot: tuple[date, int] | None = None
     while True:
         result = run_polling_cycle(settings, store)
+        if result.completed:
+            last_summary_slot = _send_due_summary(
+                settings,
+                result,
+                _local_now(clock()),
+                last_summary_slot,
+            )
         if result.completed and (result.new_count == 0 or result.mail_sent):
-            next_cycle_at = datetime.now() + timedelta(seconds=interval_seconds)
+            next_cycle_at = _local_now(clock()) + timedelta(seconds=interval_seconds)
             email_status = "eine" if result.mail_sent else "keine"
             LOGGER.info(
                 "Erfolgreicher Polling-Durchlauf: %s neue Angebote gesichtet; "
@@ -122,6 +139,58 @@ def poll_forever(
                 next_cycle_at.strftime("%Y-%m-%d %H:%M:%S"),
             )
         sleep(interval_seconds)
+
+
+def _send_due_summary(
+    settings: Settings,
+    result: PollCycleResult,
+    now: datetime,
+    last_summary_slot: tuple[date, int] | None,
+) -> tuple[date, int] | None:
+    """Send at most one due summary slot and retain failed slots for retry."""
+
+    due_slot = _due_summary_slot(now, last_summary_slot)
+    if due_slot is None:
+        return last_summary_slot
+
+    try:
+        send_html_email(
+            settings.smtp,
+            render_offer_summary_email(result.current_offers),
+            subject=SUMMARY_SUBJECT,
+        )
+    except SmtpSendError as error:
+        LOGGER.error("Scheduled summary mail delivery failed: %s", error)
+        return last_summary_slot
+
+    LOGGER.info(
+        "Geplante Angebotsübersicht versendet für %s Uhr.",
+        f"{due_slot[1]:02d}:00",
+    )
+    return due_slot
+
+
+def _due_summary_slot(
+    now: datetime,
+    last_summary_slot: tuple[date, int] | None,
+) -> tuple[date, int] | None:
+    """Return the latest local summary slot that is due and not yet sent."""
+
+    local_now = _local_now(now)
+    due_slots = [
+        (local_now.date(), hour)
+        for hour in SUMMARY_HOURS
+        if local_now.time() >= datetime_time(hour)
+    ]
+    if due_slots and due_slots[-1] != last_summary_slot:
+        return due_slots[-1]
+    return last_summary_slot
+
+
+def _local_now(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.astimezone()
+    return value.astimezone()
 
 
 def _with_local_dates(offers: Iterable[Offer]) -> tuple[Offer, ...]:

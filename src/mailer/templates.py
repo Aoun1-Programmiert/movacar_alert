@@ -48,6 +48,36 @@ def render_offer_email(
 """
 
 
+def render_offer_summary_email(offers: Iterable[ClassifiedOffer]) -> str:
+    """Render a single overview of all currently available offers."""
+
+    current = tuple(offers)
+    for offer in current:
+        if not isinstance(offer, ClassifiedOffer):
+            raise TypeError("current offers must be ClassifiedOffer instances.")
+
+    return f"""<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Aktuelle Movacar-Angebote</title>
+  <style>
+    body {{ font-family: Arial, sans-serif; color: #222; }}
+    .offer-list {{ padding: 0; }}
+    .offer {{ list-style: none; margin: 0 0 12px; padding: 12px; border: 1px solid #ddd; }}
+    .offer--highlight {{ background: #fff3cd; border: 3px solid #d39e00; }}
+    .highlight-label {{ color: #7a4f00; font-weight: bold; }}
+    .empty-section {{ color: #666; font-style: italic; }}
+  </style>
+</head>
+<body>
+  <h1>Aktuelle Movacar-Angebote</h1>
+  {_render_section("current-offers", "Aktuelle Angebote", current)}
+</body>
+</html>
+"""
+
+
 def _validated_section(
     offers: Iterable[ClassifiedOffer],
     *,

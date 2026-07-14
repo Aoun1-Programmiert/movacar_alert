@@ -117,6 +117,7 @@ def test_successful_cycle_logs_summary_before_sleep(
             settings,
             object(),
             sleep=lambda seconds: (_ for _ in ()).throw(RuntimeError("stop test loop")),
+            now=lambda: datetime(2026, 7, 14, 8),
         )
 
     log_line = log_path.read_text(encoding="utf-8")
@@ -260,6 +261,74 @@ def test_poll_forever_sleeps_for_configured_interval(
         raise RuntimeError("stop test loop")
 
     with pytest.raises(RuntimeError, match="stop test loop"):
-        poll_loop.poll_forever(settings, object(), sleep=stop_after_first_sleep)  # type: ignore[arg-type]
+        poll_loop.poll_forever(
+            settings,
+            object(),
+            sleep=stop_after_first_sleep,
+            now=lambda: datetime(2026, 7, 14, 8),
+        )  # type: ignore[arg-type]
 
     assert calls == ["cycle", 900]
+
+
+@pytest.mark.parametrize(
+    ("current_time", "expected_hour"),
+    (
+        (datetime(2026, 7, 14, 9, 5), 9),
+        (datetime(2026, 7, 14, 21, 1), 21),
+    ),
+)
+def test_poll_forever_sends_summary_at_local_schedule(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: SimpleNamespace,
+    current_time: datetime,
+    expected_hour: int,
+) -> None:
+    sent: list[object] = []
+    monkeypatch.setattr(
+        poll_loop,
+        "run_polling_cycle",
+        lambda settings, store: poll_loop.PollCycleResult(completed=True, mail_sent=False),
+    )
+    monkeypatch.setattr(
+        poll_loop,
+        "send_html_email",
+        lambda smtp, html, *, subject: sent.append(subject),
+    )
+
+    with pytest.raises(RuntimeError, match="stop test loop"):
+        poll_loop.poll_forever(
+            settings,
+            object(),
+            sleep=lambda seconds: (_ for _ in ()).throw(RuntimeError("stop test loop")),
+            now=lambda: current_time,
+        )
+
+    assert sent == [poll_loop.SUMMARY_SUBJECT]
+    assert expected_hour in poll_loop.SUMMARY_HOURS
+
+
+def test_poll_forever_does_not_send_summary_before_nine(
+    monkeypatch: pytest.MonkeyPatch, settings: SimpleNamespace
+) -> None:
+    sent: list[object] = []
+    monkeypatch.setattr(
+        poll_loop,
+        "run_polling_cycle",
+        lambda settings, store: poll_loop.PollCycleResult(completed=True, mail_sent=False),
+    )
+    monkeypatch.setattr(
+        poll_loop,
+        "send_html_email",
+        lambda smtp, html, *, subject: sent.append(subject),
+    )
+
+    with pytest.raises(RuntimeError, match="stop test loop"):
+        poll_loop.poll_forever(
+            settings,
+            object(),
+            sleep=lambda seconds: (_ for _ in ()).throw(RuntimeError("stop test loop")),
+            now=lambda: datetime(2026, 7, 14, 8, 59),
+        )
+
+    assert sent == []

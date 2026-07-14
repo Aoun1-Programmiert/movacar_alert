@@ -4,7 +4,7 @@ from datetime import datetime
 
 import pytest
 
-from src.mailer.templates import render_offer_email
+from src.mailer.templates import render_offer_email, render_offer_summary_email
 from src.models.offer import ClassifiedOffer, GeoLocation
 
 
@@ -101,3 +101,24 @@ def test_renderer_requires_classified_offers_in_matching_sections(
 ) -> None:
     with pytest.raises(error, match=message):
         render_offer_email(new_offers, existing_offers)  # type: ignore[arg-type]
+
+
+def test_summary_renderer_contains_all_current_offers() -> None:
+    html = render_offer_summary_email(
+        [
+            make_classified("current-1", state="new", is_highlighted=True),
+            make_classified("current-2", state="existing", is_highlighted=False),
+        ]
+    )
+
+    assert "Aktuelle Movacar-Angebote" in html
+    assert html.count('data-offer-id="current-') == 2
+    assert 'data-offer-id="current-1"' in html
+    assert 'data-offer-id="current-2"' in html
+
+
+def test_summary_renderer_renders_empty_overview() -> None:
+    html = render_offer_summary_email([])
+
+    assert '<section id="current-offers">' in html
+    assert '<p class="empty-section">Keine Angebote.</p>' in html
