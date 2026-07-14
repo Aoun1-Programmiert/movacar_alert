@@ -432,13 +432,13 @@ Implementiere strukturiertes JSON-Logging inkl. Pflichtfelder und Event-Typen ge
 Implementiere den vollständigen Zyklusfluss inkl. Branching, Persistenzregel und Sleep-Steuerung.
 
 **Acceptance Criteria**
-- [ ] Reihenfolge entspricht Plan-Workflow.
-- [ ] Kein Mailversand bei `new == 0`; Soft-Delete-Markierung entfernter IDs + Retention-Purge werden dennoch ausgeführt.
-- [ ] Bei `new > 0`: erst Mailversand, dann Persistenz neuer IDs.
-- [ ] Bei SMTP-Fehler: keine Persistenz neuer IDs.
-- [ ] API-/Parsing-Fehler führen zu Logging + Fortsetzung nächster Zyklen.
-- [ ] Datumsvergleiche folgen der festgelegten lokalen Zeitzone (nicht UTC).
-- [ ] Tests decken zentrale Zweige und Fehlerpfade ab.
+- [x] Reihenfolge entspricht Plan-Workflow.
+- [x] Kein Mailversand bei `new == 0`; Soft-Delete-Markierung entfernter IDs + Retention-Purge werden dennoch ausgeführt.
+- [x] Bei `new > 0`: erst Mailversand, dann Persistenz neuer IDs.
+- [x] Bei SMTP-Fehler: keine Persistenz neuer IDs.
+- [x] API-/Parsing-Fehler führen zu Logging + Fortsetzung nächster Zyklen.
+- [x] Datumsvergleiche folgen der festgelegten lokalen Zeitzone (nicht UTC).
+- [x] Tests decken zentrale Zweige und Fehlerpfade ab.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/loop/poll_loop.py`
