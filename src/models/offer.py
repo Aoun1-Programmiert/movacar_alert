@@ -1,0 +1,1 @@
+"""Offer model boundary."""

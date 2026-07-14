@@ -18,10 +18,10 @@ Ableitung aus `plan_v1.1.md` (primär) mit Validierung gegen `spec_v1.0.md` (sek
 Lege die in Plan v1.1 definierte `src/`-Struktur an und setze klare Modulgrenzen (Transport vs Fachlogik vs Orchestrierung).
 
 **Acceptance Criteria**
-- [ ] Verzeichnisstruktur entspricht Plan-Layout unter `src/`.
-- [ ] Module sind domänenscharf getrennt (`api`, `parser`, `matcher`, `storage`, `mailer`, `loop`, `config`, `models`, `logging`).
-- [ ] Kein Mischcode zwischen Transport- und Fachlogik-Bereichen.
-- [ ] Basistests prüfen, dass Importpfade/Modulstruktur konsistent auflösbar sind.
+- [x] Verzeichnisstruktur entspricht Plan-Layout unter `src/`.
+- [x] Module sind domänenscharf getrennt (`api`, `parser`, `matcher`, `storage`, `mailer`, `loop`, `config`, `models`, `logging`).
+- [x] Kein Mischcode zwischen Transport- und Fachlogik-Bereichen.
+- [x] Basistests prüfen, dass Importpfade/Modulstruktur konsistent auflösbar sind.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/config/`
