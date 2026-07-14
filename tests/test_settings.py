@@ -25,7 +25,7 @@ def valid_environment() -> dict[str, str]:
         "SMTP_USER": "mailer",
         "SMTP_PASSWORD": "secret",
         "SMTP_FROM": "sender@example.test",
-        "SMTP_TO": "recipient@example.test",
+        "SMTP_TO": '["recipient@example.test"]',
         "SMTP_USE_TLS": "true",
         "HTTP_TIMEOUT_SECONDS": "30",
     }
@@ -41,6 +41,7 @@ def test_load_settings_returns_typed_configuration_with_defaults(
     assert settings.sqlite_path == Path("./var/offers.sqlite")
     assert settings.smtp.host == "smtp.example.test"
     assert settings.smtp.port == 587
+    assert settings.smtp.recipients == ("recipient@example.test",)
     assert settings.smtp.use_tls is True
     assert settings.http_timeout_seconds == 30.0
     assert settings.de_bbox.min_lat == DEFAULT_DE_BBOX_MIN_LAT
@@ -122,3 +123,31 @@ def test_load_settings_rejects_invalid_values(
 
     with pytest.raises(SettingsValidationError, match=message):
         load_settings(valid_environment)
+
+
+@pytest.mark.parametrize(
+    "smtp_to",
+    (
+        "recipient@example.test",
+        "[]",
+        '["recipient@example.test", 3]',
+        '["recipient@example.test", " "]',
+    ),
+)
+def test_load_settings_rejects_invalid_smtp_recipient_lists(
+    valid_environment: dict[str, str], smtp_to: str
+) -> None:
+    valid_environment["SMTP_TO"] = smtp_to
+
+    with pytest.raises(SettingsValidationError, match="SMTP_TO"):
+        load_settings(valid_environment)
+
+
+def test_load_settings_accepts_multiple_smtp_recipients(
+    valid_environment: dict[str, str],
+) -> None:
+    valid_environment["SMTP_TO"] = '["first@example.test", "second@example.test"]'
+
+    settings = load_settings(valid_environment)
+
+    assert settings.smtp.recipients == ("first@example.test", "second@example.test")

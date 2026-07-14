@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from math import isfinite
@@ -40,7 +41,7 @@ class SmtpSettings:
     user: str
     password: str
     sender: str
-    recipient: str
+    recipients: tuple[str, ...]
     use_tls: bool
 
 
@@ -91,7 +92,7 @@ def load_settings(
             user=_required(values, "SMTP_USER"),
             password=_required(values, "SMTP_PASSWORD"),
             sender=_required(values, "SMTP_FROM"),
-            recipient=_required(values, "SMTP_TO"),
+            recipients=_recipient_list(_required(values, "SMTP_TO")),
             use_tls=_boolean(_required(values, "SMTP_USE_TLS"), "SMTP_USE_TLS"),
         ),
         http_timeout_seconds=_positive_float(
@@ -216,6 +217,20 @@ def _boolean(value: str, name: str) -> bool:
     if normalized_value == "false":
         return False
     raise SettingsValidationError(f"{name} must be either true or false.")
+
+
+def _recipient_list(value: str) -> tuple[str, ...]:
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as error:
+        raise SettingsValidationError("SMTP_TO must be a JSON array of email addresses.") from error
+    if not isinstance(parsed, list) or not parsed:
+        raise SettingsValidationError("SMTP_TO must be a non-empty JSON array of email addresses.")
+
+    recipients = tuple(item.strip() for item in parsed if isinstance(item, str))
+    if len(recipients) != len(parsed) or any(not recipient for recipient in recipients):
+        raise SettingsValidationError("SMTP_TO must contain only non-empty email address strings.")
+    return recipients
 
 
 def _optional_path(value: str | None) -> Path | None:

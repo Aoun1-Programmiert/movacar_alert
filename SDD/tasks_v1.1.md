@@ -369,11 +369,16 @@ und das Label „Äußerst interessant“.
 Implementiere SMTP-Transport in `smtp_mailer.py` mit klaren Erfolgs-/Fehlersignalen und Konfigurationsbindung.
 
 **Acceptance Criteria**
-- [ ] SMTP-Parameter werden vollständig aus Settings genutzt.
-- [ ] Versand-Erfolg und Versand-Fehler sind eindeutig unterscheidbar.
-- [ ] Fehler werden nicht als Erfolg maskiert.
-- [ ] Unit-Tests decken Erfolg, Auth-/Connect-/Transportfehler ab.
-- [ ] **Open-Item-Vermerk:** Exakte SMTP-Transportparameter (STARTTLS/SSL/Port) werden in diesem Task final entschieden und dokumentiert.
+- [x] SMTP-Parameter werden vollständig aus Settings genutzt.
+- [x] Versand-Erfolg und Versand-Fehler sind eindeutig unterscheidbar.
+- [x] Fehler werden nicht als Erfolg maskiert.
+- [x] Unit-Tests decken Erfolg, Auth-/Connect-/Transportfehler ab.
+- [x] **Open-Item-Vermerk:** Exakte SMTP-Transportparameter (STARTTLS/SSL/Port) werden in diesem Task final entschieden und dokumentiert.
+
+**Entscheidung zum Open Item:** Der Transport nutzt explizites TLS via
+STARTTLS, wenn `SMTP_USE_TLS=true` gesetzt ist; für Gmail wird Port `587`
+verwendet. `SMTP_TO` ist ein nicht-leeres JSON-Array von Empfängeradressen,
+z. B. `SMTP_TO=["first@example.com","second@example.com"]`.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/mailer/smtp_mailer.py`
