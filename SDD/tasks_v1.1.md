@@ -498,12 +498,12 @@ Implementiere den Startpunkt, der Konfiguration lädt, Storage initialisiert und
 Erstelle Integrationsszenarien, die die Kern-Garantien des Systems Ende-zu-Ende gegen den spezifizierten Ablauf absichern.
 
 **Acceptance Criteria**
-- [ ] Neues Angebot: genau ein Mailversand, danach DB-Persistenz.
-- [ ] Bereits bekanntes Angebot: keine „neu“-Benachrichtigung.
-- [ ] Entfernte IDs: werden zunächst soft-gelöscht (`is_deleted=1`, `deleted_at` gesetzt).
-- [ ] Soft-gelöschte IDs werden nach >14 Tagen endgültig aus DB entfernt.
-- [ ] SMTP-Fehler: neue IDs bleiben unpersistiert.
-- [ ] Tests basieren auf `tests/example_response.json` (+ gezielte Variationen).
+- [x] Neues Angebot: genau ein Mailversand, danach DB-Persistenz.
+- [x] Bereits bekanntes Angebot: keine „neu“-Benachrichtigung.
+- [x] Entfernte IDs: werden zunächst soft-gelöscht (`is_deleted=1`, `deleted_at` gesetzt).
+- [x] Soft-gelöschte IDs werden nach >14 Tagen endgültig aus DB entfernt.
+- [x] SMTP-Fehler: neue IDs bleiben unpersistiert.
+- [x] Tests basieren auf `tests/example_response.json` (+ gezielte Variationen).
 
 **Betroffene Dateien / Module / Pfade**
 - `tests/test_end_to_end_flow.py`
