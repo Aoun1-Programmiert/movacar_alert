@@ -107,10 +107,10 @@ Implementiere `src/config/settings.py` zum Laden/Validieren aller Konfigurations
 Implementiere die zentralen In-Memory-Entitäten gemäß Contract für parser/matcher/mailer/storage.
 
 **Acceptance Criteria**
-- [ ] `Offer` enthält alle geforderten Felder inkl. Origin/Destination mit Geo-Daten.
-- [ ] `ClassifiedOffer` erweitert um `is_highlighted` und `state`.
-- [ ] Typen/Validität sind für nachgelagerte Module eindeutig.
-- [ ] Unit-Tests prüfen Modellkonsistenz und erwartete Felder.
+- [x] `Offer` enthält alle geforderten Felder inkl. Origin/Destination mit Geo-Daten.
+- [x] `ClassifiedOffer` erweitert um `is_highlighted` und `state`.
+- [x] Typen/Validität sind für nachgelagerte Module eindeutig.
+- [x] Unit-Tests prüfen Modellkonsistenz und erwartete Felder.
 
 **Betroffene Dateien / Module / Pfade**
 - `src/models/offer.py`
