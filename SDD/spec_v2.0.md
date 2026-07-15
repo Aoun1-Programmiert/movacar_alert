@@ -55,10 +55,11 @@ Nicht Bestandteil dieses Zyklus sind:
 
 ### 5.3 Räumliche Bewertung
 
-- Das System löst die für eine Reise konfigurierte Startstadt über OpenStreetMap in geografische Koordinaten auf.
+- Das System verwendet für die Startstadt einer Reise geografische Koordinaten, die vorrangig über OpenStreetMap aufgelöst werden. Ist diese Auflösung nicht ausreichend zuverlässig, sind Längen- und Breitengrad verpflichtend für die Reise zu hinterlegen.
 - Für jedes Angebot berechnet das System die Luftlinienentfernung zwischen dessen Startposition und der Startstadt der zugehörigen Reise.
-- E-Mail-Angebotslisten werden aufsteigend nach dieser Entfernung sortiert.
-- Angebote innerhalb von 100 km und innerhalb von 250 km werden im E-Mail-Output unterschiedlich hervorgehoben.
+- Jedes E-Mail-Template listet zuerst die neu erkannten Angebote auf.
+- Neue Angebote innerhalb von 100 km und innerhalb von 250 km werden unterschiedlich hervorgehoben.
+- Unterhalb der neuen Angebote listet das E-Mail-Template alle aktuell verfügbaren Angebote, einschließlich der neu erkannten Angebote, aufsteigend nach ihrer Entfernung zur Startstadt der Reise auf.
 
 ### 5.4 E-Mail-Versand
 
@@ -97,7 +98,7 @@ Die Umsetzung ist abnahmefähig, wenn:
 1. Mehrere Reisen mit jeweils eigenen Zeiträumen, Startstädten und Empfängern dauerhaft verwaltet werden können.
 2. Der Polling-Ablauf jede gespeicherte Reise verarbeitet und dafür eine reisespezifische API-Anfrage ausführt.
 3. Angebote eindeutig und dauerhaft im Kontext der jeweiligen Reise behandelt werden.
-4. Angebotslisten die Distanz zur Reise-Startstadt berücksichtigen, korrekt sortiert sind und die 100-km- und 250-km-Schwellen sichtbar unterscheiden.
+4. E-Mails zuerst neue Angebote mit sichtbarer Unterscheidung der 100-km- und 250-km-Schwellen und darunter alle verfügbaren Angebote einschließlich der neuen Angebote aufsteigend nach Distanz zur Reise-Startstadt anzeigen.
 5. E-Mails die Reiseinformationen enthalten und nur an deren konfigurierte Empfänger adressiert werden.
 6. Die vorgesehenen Reise- und Empfängeroperationen über das Verwaltungswerkzeug ausführbar sind.
 7. Das separate Gmail-Konto für den Versand konfiguriert und dokumentiert ist.
@@ -109,7 +110,7 @@ Die folgenden Punkte sind absichtlich nicht in dieser SPEC entschieden und müss
 
 - Exakte Tabellenstruktur, Schlüssel und Migration für Reisen, Empfänger und Angebote.
 - Modell und Lebenszyklus der Angebots-zu-Reise-Zuordnung, insbesondere bei einem Angebot, das zu mehreren Reisen passt.
-- Konkreter OpenStreetMap-Endpunkt, Fehlerbehandlung, Rate-Limit-Strategie und Caching der Geocodierung.
+- Entscheidung zwischen einer OpenStreetMap-basierten Ortsauflösung und verpflichtend hinterlegten Längen- und Breitengraden je Reise sowie, bei OpenStreetMap-Nutzung, Endpunkt, Fehlerbehandlung, Rate-Limit-Strategie und Caching.
 - Formel, Einheiten, Rundung und Darstellung der Luftlinienentfernung.
 - Präzise Darstellung und Priorität der Highlighting-Stufen unter 100 km und unter 250 km.
 - Ausgestaltung, Ein- und Ausgabeformate sowie Fehlerverhalten der Verwaltungs-CLI.
@@ -120,13 +121,11 @@ Die folgenden Punkte sind absichtlich nicht in dieser SPEC entschieden und müss
 
 ### Annahmen
 
-- Die bestehende technische Basis kann die erforderlichen Architekturänderungen aufnehmen.
-- Die bestehende Angebots-API unterstützt die benötigten Start- und Endparameter für jede Reise.
-- Angebotsdaten enthalten eine nutzbare Startposition für die Distanzberechnung.
-- OpenStreetMap kann die konfigurierten Startstädte ausreichend zuverlässig auflösen.
+- Mit Ausnahme der zuverlässigen Ermittlung von Längen- und Breitengraden für die konfigurierte Startstadt sind die technischen Voraussetzungen für alle Änderungen bereits vorhanden.
+- Die PLAN-Phase bewertet, ob die Ortsauflösung über OpenStreetMap die fachlichen und betrieblichen Anforderungen zuverlässig erfüllt.
 
 ### Risiken
 
-- Mehrdeutige Ortsnamen, fehlende Angebotskoordinaten und externe Geocoding-Grenzen können die Distanzbewertung beeinträchtigen.
+- Mehrdeutige Ortsnamen, externe Geocoding-Grenzen und unzuverlässige Ergebnisse der OpenStreetMap-Auflösung können die Distanzbewertung beeinträchtigen. Falls dieses Risiko nicht vertretbar ist, werden Längen- und Breitengrad als verpflichtende Informationen für jede Reise geführt.
 - Eine falsche oder unvollständige Angebots-zu-Reise-Zuordnung kann zu Doppelbenachrichtigungen oder ausgelassenen Benachrichtigungen führen.
 - Die separate Provisionierung des Gmail-Kontos ist eine externe Abhängigkeit für den produktiven Versand.
