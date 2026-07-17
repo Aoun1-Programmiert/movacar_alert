@@ -26,7 +26,11 @@ def test_initialize_schema_creates_offers_table_with_required_columns(
         "start_date",
         "end_date",
         "origin_city",
+        "origin_latitude",
+        "origin_longitude",
         "destination_city",
+        "destination_latitude",
+        "destination_longitude",
         "free_km",
         "first_seen_timestamp",
         "is_deleted",
@@ -56,7 +60,7 @@ def test_initialize_schema_records_version_and_is_idempotent(tmp_path: Path) -> 
             "SELECT version, applied_at FROM schema_migrations"
         ).fetchall() == first_metadata
 
-    assert [version for version, _ in first_metadata] == [1, 2]
+    assert [version for version, _ in first_metadata] == [1, 2, 3]
 
 
 def test_initialize_schema_baselines_existing_unversioned_offers(
@@ -93,8 +97,15 @@ def test_initialize_schema_baselines_existing_unversioned_offers(
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
             "SELECT version FROM schema_migrations"
-        ).fetchall() == [(1,), (2,)]
+        ).fetchall() == [(1,), (2,), (3,)]
         assert connection.execute("SELECT id FROM offers").fetchall() == [("legacy",)]
+        assert connection.execute(
+            """
+            SELECT origin_latitude, origin_longitude,
+                   destination_latitude, destination_longitude
+            FROM offers WHERE id = 'legacy'
+            """
+        ).fetchone() == (None, None, None, None)
 
 
 def test_initialize_schema_adds_trip_schema_to_version_one_database(
@@ -142,7 +153,7 @@ def test_initialize_schema_adds_trip_schema_to_version_one_database(
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
             "SELECT version FROM schema_migrations"
-        ).fetchall() == [(1,), (2,)]
+        ).fetchall() == [(1,), (2,), (3,)]
         assert connection.execute("SELECT id FROM offers").fetchall() == [("legacy",)]
         assert {
             row[0]

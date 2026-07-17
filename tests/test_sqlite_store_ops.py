@@ -196,3 +196,78 @@ def test_cleanup_preserves_ids_present_in_current_response(
 def test_cleanup_rejects_invalid_ids(store: SQLiteStore) -> None:
     with pytest.raises(ValueError, match="non-empty strings"):
         store.soft_delete_removed_offers([""])
+
+
+def test_reconcile_trip_offer_availability_is_trip_scoped_and_preserves_sent_state(
+    store: SQLiteStore, offer: Offer
+) -> None:
+    second_offer = Offer(
+        id="offer-2",
+        start_date=offer.start_date,
+        end_date=offer.end_date,
+        free_km=offer.free_km,
+        origin=offer.origin,
+        destination=offer.destination,
+    )
+    store.insert_offers([offer, second_offer])
+    with sqlite3.connect(store.database_path) as connection:
+        connection.executemany(
+            """
+            INSERT INTO trips (
+                trip_id, name, pickup_start, pickup_end, start_city, latitude, longitude
+            ) VALUES (?, ?, '2026-07-14', '2026-07-20', 'Berlin', 52.52, 13.405)
+            """,
+            [("trip-1", "Sommerfahrt"), ("trip-2", "Herbstfahrt")],
+        )
+    store.create_trip_offer("trip-1", offer.id, distance_km=12.5)
+    store.create_trip_offer("trip-1", second_offer.id, distance_km=25)
+    store.create_trip_offer("trip-2", second_offer.id, distance_km=50)
+    with sqlite3.connect(store.database_path) as connection:
+        connection.execute(
+            """
+            UPDATE trip_offers
+            SET is_sent = 1, sent_at = '2026-07-16T11:00:00+02:00'
+            WHERE trip_id = 'trip-1' AND offer_id = 'offer-2'
+            """
+        )
+
+    assert store.reconcile_trip_offer_availability("trip-1", {offer.id}) == 1
+
+    with sqlite3.connect(store.database_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT trip_id, offer_id, is_available, unavailable_since, is_sent, sent_at
+            FROM trip_offers
+            ORDER BY trip_id, offer_id
+            """
+        ).fetchall()
+    assert rows[0] == ("trip-1", "offer-1", 1, None, 0, None)
+    assert rows[1][:3] == ("trip-1", "offer-2", 0)
+    assert rows[1][4:] == (1, "2026-07-16T11:00:00+02:00")
+    assert rows[1][3] is not None
+    datetime.fromisoformat(rows[1][3])
+    assert rows[2] == ("trip-2", "offer-2", 1, None, 0, None)
+
+
+@pytest.mark.parametrize("complete_offer_ids", [("",), ("offer-1", "offer-1")])
+def test_reconcile_trip_offer_availability_rejects_invalid_complete_ids_without_changes(
+    store: SQLiteStore, offer: Offer, complete_offer_ids: tuple[str, ...]
+) -> None:
+    with sqlite3.connect(store.database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO trips (
+                trip_id, name, pickup_start, pickup_end, start_city, latitude, longitude
+            ) VALUES ('trip-1', 'Sommerfahrt', '2026-07-14', '2026-07-20', 'Berlin', 52.52, 13.405)
+            """
+        )
+    store.insert_offers([offer])
+    store.create_trip_offer("trip-1", offer.id, distance_km=12.5)
+
+    with pytest.raises(ValueError):
+        store.reconcile_trip_offer_availability("trip-1", complete_offer_ids)
+
+    with sqlite3.connect(store.database_path) as connection:
+        assert connection.execute(
+            "SELECT is_available, unavailable_since FROM trip_offers"
+        ).fetchone() == (1, None)

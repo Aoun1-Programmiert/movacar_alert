@@ -236,3 +236,84 @@ def test_duplicate_movacar_ids_are_rejected_before_persistence(
         synchronize_trip_offers(store, trip, [offer, offer])
 
     assert store.read_offers() == {}
+
+
+def test_successful_complete_synchronization_marks_missing_relations_unavailable(
+    store: SQLiteStore, trip: Trip, offer: Offer
+) -> None:
+    missing_offer = Offer(
+        id="offer-2",
+        start_date=offer.start_date,
+        end_date=offer.end_date,
+        free_km=offer.free_km,
+        origin=GeoLocation("Cologne", 50.9375, 6.9603),
+        destination=offer.destination,
+    )
+    store.create_trip(trip)
+    synchronize_trip_offers(store, trip, [offer, missing_offer])
+    with sqlite3.connect(store.database_path) as connection:
+        connection.execute(
+            """
+            UPDATE trip_offers
+            SET is_sent = 1, sent_at = '2026-07-16T11:00:00+02:00'
+            WHERE trip_id = ? AND offer_id = ?
+            """,
+            (trip.trip_id, missing_offer.id),
+        )
+
+    synchronize_trip_offers(store, trip, [offer])
+
+    with sqlite3.connect(store.database_path) as connection:
+        available, unavailable_since, is_sent, sent_at = connection.execute(
+            """
+            SELECT is_available, unavailable_since, is_sent, sent_at
+            FROM trip_offers
+            WHERE trip_id = ? AND offer_id = ?
+            """,
+            (trip.trip_id, missing_offer.id),
+        ).fetchone()
+    assert available == 0
+    assert unavailable_since is not None
+    datetime.fromisoformat(unavailable_since)
+    assert (is_sent, sent_at) == (1, "2026-07-16T11:00:00+02:00")
+
+
+def test_failed_synchronization_does_not_reconcile_existing_availability(
+    store: SQLiteStore, trip: Trip, offer: Offer
+) -> None:
+    missing_offer = Offer(
+        id="offer-2",
+        start_date=offer.start_date,
+        end_date=offer.end_date,
+        free_km=offer.free_km,
+        origin=GeoLocation("Cologne", 50.9375, 6.9603),
+        destination=offer.destination,
+    )
+    store.create_trip(trip)
+    synchronize_trip_offers(store, trip, [offer, missing_offer])
+
+    def failing_calculator(
+        origin_latitude: float,
+        origin_longitude: float,
+        destination_latitude: float,
+        destination_longitude: float,
+    ) -> float:
+        raise RuntimeError("simulated parser or API failure")
+
+    with pytest.raises(RuntimeError, match="simulated parser or API failure"):
+        synchronize_trip_offers(
+            store,
+            trip,
+            [offer],
+            distance_calculator=failing_calculator,
+        )
+
+    with sqlite3.connect(store.database_path) as connection:
+        assert connection.execute(
+            """
+            SELECT is_available, unavailable_since
+            FROM trip_offers
+            WHERE trip_id = ? AND offer_id = ?
+            """,
+            (trip.trip_id, missing_offer.id),
+        ).fetchone() == (1, None)
