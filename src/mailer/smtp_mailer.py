@@ -5,6 +5,7 @@ from __future__ import annotations
 import smtplib
 import ssl
 from email.message import EmailMessage
+from email.utils import parseaddr
 from typing import Final
 
 from src.config.settings import SmtpSettings
@@ -50,6 +51,9 @@ def send_html_email(
     message["To"] = ", ".join(recipients)
     message.set_content("Diese Benachrichtigung enthält HTML-Inhalt.")
     message.add_alternative(html_body, subtype="html")
+    envelope_sender = parseaddr(smtp_settings.sender)[1]
+    if not envelope_sender:
+        raise ValueError("SMTP_FROM must contain a valid email address.")
 
     try:
         with smtplib.SMTP(smtp_settings.host, smtp_settings.port) as smtp:
@@ -58,7 +62,7 @@ def send_html_email(
             smtp.login(smtp_settings.user, smtp_settings.password)
             refused_recipients = smtp.send_message(
                 message,
-                from_addr=smtp_settings.sender,
+                from_addr=envelope_sender,
                 to_addrs=recipients,
             )
     except smtplib.SMTPAuthenticationError as error:

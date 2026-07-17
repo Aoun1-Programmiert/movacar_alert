@@ -1,5 +1,18 @@
 # Movacar Alert
 
+## Nächste Schritte
+
+Ich möchte das CLI-Script zum Erstellen von Reisen per API ansprechbar machen
+diese API soll dann über eine bereitgestellte Website Aufrufbar sein
+diese Website soll dann die Möglichkeit bieten, Reisen anzulegen, zu löschen und Empfänger zu verwalten
+
+darüber hinaus möchte ich alle Städte, die über eine Reise angelegt werden sowie alle Städte, die in Angeboten aufgelistet werden, 
+in einer SQL Tabelle abspeichern (Name, Koordinaten, Land)
+- das Land soll über die Koordinate bestimmt werden (Welche API kann ich dafür nutzen? OpenStreetMap Nominatim? Google Maps API?)
+- dieses Land dann im ISO Format abspeichern (z.B. DE, AT, CH)
+- auf der Website soll es dann möglich sein, beim Anlegen der Stadt für die Reise vorschläge zu bekommen, 
+welche Städte bereits in der Datenbank vorhanden sind (Autocomplete)
+
 ## Überblick
 
 Movacar Alert überwacht die konfigurierte Movacar-API fortlaufend auf Angebote und informiert per E-Mail über neue Einträge. Bereits bekannte Angebote werden in einer lokalen SQLite-Datenbank gespeichert, damit nach Neustarts keine doppelten Benachrichtigungen entstehen.
@@ -55,7 +68,7 @@ SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_USER=benutzer@example.com
 SMTP_PASSWORD=dein-passwort
-SMTP_FROM=benutzer@example.com
+SMTP_FROM=Movacar Alert <benutzer@example.com>
 SMTP_USE_TLS=true
 
 HTTP_TIMEOUT_SECONDS=10
@@ -78,7 +91,7 @@ Gmail-Passwort und committe keine Zugangsdaten.
 | `SMTP_PORT` | Ja | SMTP-Port, z. B. `587` für STARTTLS |
 | `SMTP_USER` | Ja | SMTP-Benutzername |
 | `SMTP_PASSWORD` | Ja | SMTP-Passwort oder App-Passwort |
-| `SMTP_FROM` | Ja | Absenderadresse |
+| `SMTP_FROM` | Ja | Absender im Format `Anzeigename <adresse@example.com>`; ohne Anzeigename ist auch nur die Adresse möglich |
 | `SMTP_USE_TLS` | Ja | `true` für STARTTLS, sonst `false` |
 | `HTTP_TIMEOUT_SECONDS` | Ja | Timeout eines API-Aufrufs in Sekunden |
 | `LOG_FILE_PATH` | Nein | Optionaler Pfad für ein rotierendes Logfile |

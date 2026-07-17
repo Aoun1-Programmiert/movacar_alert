@@ -54,6 +54,23 @@ def test_send_html_email_uses_all_settings_and_reports_success(
 
 
 @patch("src.mailer.smtp_mailer.smtplib.SMTP")
+def test_send_html_email_separates_display_name_from_envelope_sender(
+    smtp_constructor: MagicMock, smtp_settings: SmtpSettings
+) -> None:
+    smtp = smtp_constructor.return_value.__enter__.return_value
+    smtp.send_message.return_value = {}
+    smtp_settings = SmtpSettings(
+        **{**smtp_settings.__dict__, "sender": "Movacar Alert <sender@example.test>"}
+    )
+
+    send_html_email(smtp_settings, "<p>HTML</p>", recipients=("recipient@example.test",))
+
+    message = smtp.send_message.call_args.args[0]
+    assert message["From"] == "Movacar Alert <sender@example.test>"
+    assert smtp.send_message.call_args.kwargs["from_addr"] == "sender@example.test"
+
+
+@patch("src.mailer.smtp_mailer.smtplib.SMTP")
 def test_send_html_email_uses_explicit_trip_recipients(
     smtp_constructor: MagicMock, smtp_settings: SmtpSettings
 ) -> None:
