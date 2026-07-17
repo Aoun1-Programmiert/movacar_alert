@@ -13,7 +13,7 @@ from typing import Any
 
 from src.models.trip import Trip
 from src.storage.sqlite_store import SQLiteStore, SQLiteStoreError
-from src.validation.trip_validation import TripValidationError
+from src.validation.trip_validation import TripValidationError, normalize_email
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -66,6 +66,34 @@ def _build_parser() -> argparse.ArgumentParser:
     list_command = trip_commands.add_parser("list", help="List all trips.")
     _add_json_option(list_command)
     list_command.set_defaults(handler=_list_trips)
+
+    recipient = trip_commands.add_parser("recipient", help="Manage trip recipients.")
+    recipient_commands = recipient.add_subparsers(
+        dest="recipient_command", required=True
+    )
+
+    add_recipient = recipient_commands.add_parser(
+        "add", help="Add an email recipient to a trip."
+    )
+    add_recipient.add_argument("--trip-id", required=True)
+    add_recipient.add_argument("--email", required=True)
+    _add_json_option(add_recipient)
+    add_recipient.set_defaults(handler=_add_recipient)
+
+    remove_recipient = recipient_commands.add_parser(
+        "remove", help="Remove an email recipient from a trip."
+    )
+    remove_recipient.add_argument("--trip-id", required=True)
+    remove_recipient.add_argument("--email", required=True)
+    _add_json_option(remove_recipient)
+    remove_recipient.set_defaults(handler=_remove_recipient)
+
+    list_recipients = recipient_commands.add_parser(
+        "list", help="List the recipients of a trip."
+    )
+    list_recipients.add_argument("--trip-id", required=True)
+    _add_json_option(list_recipients)
+    list_recipients.set_defaults(handler=_list_recipients)
     return parser
 
 
@@ -123,6 +151,42 @@ def _list_trips(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _add_recipient(arguments: argparse.Namespace) -> int:
+    email = normalize_email(arguments.email)
+    _open_store(arguments.sqlite_path).add_trip_recipient(arguments.trip_id, email)
+    _write_result(
+        arguments.json,
+        {"trip_id": arguments.trip_id.strip(), "recipient": email},
+        f"Added recipient {email!r} to trip {arguments.trip_id.strip()!r}.",
+    )
+    return 0
+
+
+def _remove_recipient(arguments: argparse.Namespace) -> int:
+    email = normalize_email(arguments.email)
+    _open_store(arguments.sqlite_path).remove_trip_recipient(arguments.trip_id, email)
+    _write_result(
+        arguments.json,
+        {"trip_id": arguments.trip_id.strip(), "recipient": email},
+        f"Removed recipient {email!r} from trip {arguments.trip_id.strip()!r}.",
+    )
+    return 0
+
+
+def _list_recipients(arguments: argparse.Namespace) -> int:
+    recipients = _open_store(arguments.sqlite_path).list_trip_recipients(
+        arguments.trip_id
+    )
+    trip_id = arguments.trip_id.strip()
+    emails = [recipient.normalized_email for recipient in recipients]
+    _write_result(
+        arguments.json,
+        {"trip_id": trip_id, "recipients": emails},
+        _format_recipient_list(trip_id, emails),
+    )
+    return 0
+
+
 def _open_store(database_path: Path) -> SQLiteStore:
     store = SQLiteStore(database_path)
     store.initialize_schema()
@@ -151,6 +215,14 @@ def _format_trip_list(trips: Sequence[Trip]) -> str:
             f"  Start city: {trip.start_city} ({trip.latitude}, {trip.longitude})"
         )
         for trip in trips
+    )
+
+
+def _format_recipient_list(trip_id: str, recipients: Sequence[str]) -> str:
+    if not recipients:
+        return f"No recipients configured for trip {trip_id!r}."
+    return "\n".join(
+        [f"{trip_id}:"] + [f"  {recipient}" for recipient in recipients]
     )
 
 
