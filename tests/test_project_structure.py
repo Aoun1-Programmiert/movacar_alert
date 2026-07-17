@@ -18,6 +18,7 @@ EXPECTED_MODULES = (
     "src.mailer.templates",
     "src.loop.poll_loop",
     "src.models.offer",
+    "src.models.trip",
     "src.logging.logger",
 )
 
@@ -34,6 +35,7 @@ def test_plan_source_layout_exists() -> None:
         "mailer/templates.py",
         "loop/poll_loop.py",
         "models/offer.py",
+        "models/trip.py",
         "logging/logger.py",
     )
 

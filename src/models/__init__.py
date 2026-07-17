@@ -1,5 +1,25 @@
 """Application data models package."""
 
-from .offer import ClassifiedOffer, GeoLocation, Location, Offer, OfferState
+from .offer import (
+    DistanceTier,
+    GeoLocation,
+    Location,
+    Offer,
+    Trip,
+    TripOffer,
+    TripOfferState,
+    TripOfferView,
+    TripRecipient,
+)
 
-__all__ = ["ClassifiedOffer", "GeoLocation", "Location", "Offer", "OfferState"]
+__all__ = [
+    "DistanceTier",
+    "GeoLocation",
+    "Location",
+    "Offer",
+    "Trip",
+    "TripOffer",
+    "TripOfferState",
+    "TripOfferView",
+    "TripRecipient",
+]
