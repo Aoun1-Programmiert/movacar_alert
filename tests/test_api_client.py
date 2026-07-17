@@ -99,6 +99,47 @@ def test_fetch_offers_retries_with_exponential_backoff(
     assert sleeps == [1, 2, 4]
 
 
+def test_fetch_offers_retries_independently_for_each_trip(
+    monkeypatch: pytest.MonkeyPatch, settings: SimpleNamespace, trip: Trip
+) -> None:
+    second_trip = Trip(
+        trip_id="trip-456",
+        name="Herbstfahrt",
+        pickup_start=date(2026, 9, 1),
+        pickup_end=date(2026, 9, 5),
+        start_city="München",
+        latitude=48.1372,
+        longitude=11.5756,
+    )
+    request_windows: list[tuple[str, str]] = []
+    sleeps: list[int] = []
+
+    def urlopen_with_first_trip_retry(
+        request: object, *, timeout: float
+    ) -> FakeResponse:
+        query = parse_qs(urlsplit(request.full_url).query)  # type: ignore[union-attr]
+        pickup_window = (query["pickupDateFrom"][0], query["pickupDateTo"][0])
+        request_windows.append(pickup_window)
+        if pickup_window == ("2026-07-20", "2026-07-25") and request_windows.count(
+            pickup_window
+        ) == 1:
+            raise URLError("offline")
+        return FakeResponse(b'{"data": [], "included": []}')
+
+    monkeypatch.setattr(api_client, "urlopen", urlopen_with_first_trip_retry)
+    monkeypatch.setattr(api_client.time, "sleep", sleeps.append)
+
+    assert api_client.fetch_offers(settings, trip) == {"data": [], "included": []}
+    assert api_client.fetch_offers(settings, second_trip) == {"data": [], "included": []}
+
+    assert request_windows == [
+        ("2026-07-20", "2026-07-25"),
+        ("2026-07-20", "2026-07-25"),
+        ("2026-09-01", "2026-09-05"),
+    ]
+    assert sleeps == [1]
+
+
 def test_fetch_offers_signals_timeout_after_all_retries(
     monkeypatch: pytest.MonkeyPatch, settings: SimpleNamespace, trip: Trip
 ) -> None:
