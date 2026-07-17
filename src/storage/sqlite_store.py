@@ -14,6 +14,20 @@ from src.models.offer import Offer
 
 LOGGER = logging.getLogger("movacar_alert.storage.sqlite_store")
 
+SCHEMA_VERSION = 1
+_MIGRATIONS_TABLE = "schema_migrations"
+_OFFERS_COLUMNS = {
+    "id",
+    "start_date",
+    "end_date",
+    "origin_city",
+    "destination_city",
+    "free_km",
+    "first_seen_timestamp",
+    "is_deleted",
+    "deleted_at",
+}
+
 
 class SQLiteStoreError(RuntimeError):
     """Raised when a database operation cannot be completed."""
@@ -41,28 +55,79 @@ class SQLiteStore:
         self.database_path = Path(database_path)
 
     def initialize_schema(self) -> None:
-        """Create the offers table when it does not exist yet."""
+        """Apply all SQLite migrations atomically and idempotently."""
 
         try:
             with sqlite3.connect(self.database_path) as connection:
+                connection.execute("BEGIN")
                 connection.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS offers (
-                        id TEXT PRIMARY KEY,
-                        start_date TEXT NOT NULL,
-                        end_date TEXT NOT NULL,
-                        origin_city TEXT NOT NULL,
-                        destination_city TEXT NOT NULL,
-                        free_km INTEGER NOT NULL,
-                        first_seen_timestamp TEXT NOT NULL,
-                        is_deleted INTEGER NOT NULL DEFAULT 0,
-                        deleted_at TEXT NULL
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {_MIGRATIONS_TABLE} (
+                        version INTEGER PRIMARY KEY,
+                        applied_at TEXT NOT NULL
                     )
                     """
                 )
+                applied_versions = {
+                    row[0]
+                    for row in connection.execute(
+                        f"SELECT version FROM {_MIGRATIONS_TABLE}"
+                    )
+                }
+                if SCHEMA_VERSION not in applied_versions:
+                    self._apply_offers_baseline(connection)
+                    connection.execute(
+                        f"""
+                        INSERT INTO {_MIGRATIONS_TABLE} (version, applied_at)
+                        VALUES (?, ?)
+                        """,
+                        (
+                            SCHEMA_VERSION,
+                            datetime.now(LOCAL_TIMEZONE).isoformat(),
+                        ),
+                    )
+                connection.commit()
         except sqlite3.Error as exc:
             LOGGER.error("SQLite schema initialization failed: %s", exc)
             raise SQLiteStoreError("Could not initialize the SQLite schema.") from exc
+
+    @staticmethod
+    def _apply_offers_baseline(connection: sqlite3.Connection) -> None:
+        """Create or validate the unversioned offers baseline."""
+
+        offers_exists = connection.execute(
+            """
+            SELECT 1
+            FROM sqlite_master
+            WHERE type = 'table' AND name = 'offers'
+            """
+        ).fetchone()
+        if offers_exists is None:
+            connection.execute(
+                """
+                CREATE TABLE offers (
+                    id TEXT PRIMARY KEY,
+                    start_date TEXT NOT NULL,
+                    end_date TEXT NOT NULL,
+                    origin_city TEXT NOT NULL,
+                    destination_city TEXT NOT NULL,
+                    free_km INTEGER NOT NULL,
+                    first_seen_timestamp TEXT NOT NULL,
+                    is_deleted INTEGER NOT NULL DEFAULT 0,
+                    deleted_at TEXT NULL
+                )
+                """
+            )
+            return
+
+        existing_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(offers)")
+        }
+        if not _OFFERS_COLUMNS.issubset(existing_columns):
+            missing_columns = ", ".join(sorted(_OFFERS_COLUMNS - existing_columns))
+            raise sqlite3.DatabaseError(
+                f"Existing offers table is missing required columns: {missing_columns}"
+            )
 
     def read_offers(self, *, include_deleted: bool = False) -> dict[str, StoredOffer]:
         """Read persisted offers for the next delta calculation."""
