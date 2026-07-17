@@ -403,37 +403,132 @@ class SQLiteStore:
         first_seen_timestamp = datetime.now(LOCAL_TIMEZONE).isoformat()
         try:
             with sqlite3.connect(self.database_path) as connection:
-                connection.executemany(
-                    """
-                    INSERT INTO offers (
-                        id, start_date, end_date, origin_city, destination_city,
-                        free_km, first_seen_timestamp, is_deleted, deleted_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL)
-                    ON CONFLICT(id) DO UPDATE SET
-                        start_date = excluded.start_date,
-                        end_date = excluded.end_date,
-                        origin_city = excluded.origin_city,
-                        destination_city = excluded.destination_city,
-                        free_km = excluded.free_km,
-                        is_deleted = 0,
-                        deleted_at = NULL
-                    """,
-                    (
-                        (
-                            offer.id,
-                            offer.start_date.isoformat(),
-                            offer.end_date.isoformat(),
-                            offer.origin.city,
-                            offer.destination.city,
-                            offer.free_km,
-                            first_seen_timestamp,
-                        )
-                        for offer in validated_offers
-                    ),
-                )
+                self._upsert_offers(connection, validated_offers, first_seen_timestamp)
         except sqlite3.Error as exc:
             LOGGER.error("SQLite offer insert failed: %s", exc)
             raise SQLiteStoreError("Could not insert offers into SQLite.") from exc
+
+    def synchronize_trip_offers(
+        self,
+        trip_id: str,
+        offers_with_distances: Iterable[tuple[Offer, float]],
+    ) -> frozenset[str]:
+        """Atomically upsert offers and create or refresh their trip relations.
+
+        Returns the offer IDs whose relations were newly created for this trip.
+        Existing relations retain their notification state.
+        """
+
+        trip_id = validate_trip_id(trip_id)
+        synchronized = tuple(offers_with_distances)
+        offer_ids: list[str] = []
+        for item in synchronized:
+            if not isinstance(item, tuple) or len(item) != 2:
+                raise ValueError(
+                    "offers_with_distances must contain (Offer, distance_km) tuples."
+                )
+            offer, distance_km = item
+            if not isinstance(offer, Offer):
+                raise ValueError(
+                    "offers_with_distances must contain valid Offer instances."
+                )
+            if (
+                isinstance(distance_km, bool)
+                or not isinstance(distance_km, (int, float))
+                or not isfinite(distance_km)
+                or distance_km < 0
+            ):
+                raise ValueError("distance_km must be a finite, non-negative number.")
+            offer_ids.append(offer.id)
+
+        if len(set(offer_ids)) != len(offer_ids):
+            raise ValueError("offers_with_distances must contain unique offer IDs.")
+
+        observed_at = datetime.now(LOCAL_TIMEZONE).isoformat()
+        try:
+            with sqlite3.connect(self.database_path) as connection:
+                connection.execute("PRAGMA foreign_keys = ON")
+                connection.execute("BEGIN IMMEDIATE")
+                self._require_trip(connection, trip_id)
+
+                existing_ids: set[str] = set()
+                if offer_ids:
+                    placeholders = ", ".join("?" for _ in offer_ids)
+                    existing_ids = {
+                        row[0]
+                        for row in connection.execute(
+                            f"""
+                            SELECT offer_id
+                            FROM trip_offers
+                            WHERE trip_id = ? AND offer_id IN ({placeholders})
+                            """,
+                            (trip_id, *offer_ids),
+                        )
+                    }
+
+                self._upsert_offers(
+                    connection,
+                    tuple(offer for offer, _ in synchronized),
+                    observed_at,
+                )
+                connection.executemany(
+                    """
+                    INSERT INTO trip_offers (
+                        trip_id, offer_id, distance_km, first_seen_at, last_seen_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(trip_id, offer_id) DO UPDATE SET
+                        distance_km = excluded.distance_km,
+                        is_available = 1,
+                        last_seen_at = excluded.last_seen_at,
+                        unavailable_since = NULL
+                    """,
+                    (
+                        (trip_id, offer.id, distance_km, observed_at, observed_at)
+                        for offer, distance_km in synchronized
+                    ),
+                )
+        except sqlite3.Error as exc:
+            LOGGER.error("SQLite trip synchronization failed: %s", exc)
+            raise SQLiteStoreError(
+                f"Could not synchronize offers for trip {trip_id!r}."
+            ) from exc
+
+        return frozenset(set(offer_ids) - existing_ids)
+
+    @staticmethod
+    def _upsert_offers(
+        connection: sqlite3.Connection,
+        offers: tuple[Offer, ...],
+        first_seen_timestamp: str,
+    ) -> None:
+        connection.executemany(
+            """
+            INSERT INTO offers (
+                id, start_date, end_date, origin_city, destination_city,
+                free_km, first_seen_timestamp, is_deleted, deleted_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL)
+            ON CONFLICT(id) DO UPDATE SET
+                start_date = excluded.start_date,
+                end_date = excluded.end_date,
+                origin_city = excluded.origin_city,
+                destination_city = excluded.destination_city,
+                free_km = excluded.free_km,
+                is_deleted = 0,
+                deleted_at = NULL
+            """,
+            (
+                (
+                    offer.id,
+                    offer.start_date.isoformat(),
+                    offer.end_date.isoformat(),
+                    offer.origin.city,
+                    offer.destination.city,
+                    offer.free_km,
+                    first_seen_timestamp,
+                )
+                for offer in offers
+            ),
+        )
 
     def create_trip_offer(
         self, trip_id: str, offer_id: str, *, distance_km: float
