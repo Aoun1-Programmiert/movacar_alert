@@ -33,6 +33,7 @@ def send_html_email(
     smtp_settings: SmtpSettings,
     html_body: str,
     *,
+    recipients: tuple[str, ...] | None = None,
     subject: str = DEFAULT_SUBJECT,
 ) -> None:
     """Send an HTML notification using STARTTLS when configured.
@@ -40,10 +41,14 @@ def send_html_email(
     ``SMTP_USE_TLS=true`` selects explicit TLS via STARTTLS, intended for port
     587. SMTP errors are translated to specific transport-boundary exceptions.
     """
+    message_recipients = smtp_settings.recipients if recipients is None else recipients
+    if not message_recipients:
+        raise ValueError("At least one email recipient is required.")
+
     message = EmailMessage()
     message["Subject"] = subject
     message["From"] = smtp_settings.sender
-    message["To"] = ", ".join(smtp_settings.recipients)
+    message["To"] = ", ".join(message_recipients)
     message.set_content("Diese Benachrichtigung enthält HTML-Inhalt.")
     message.add_alternative(html_body, subtype="html")
 
@@ -55,7 +60,7 @@ def send_html_email(
             refused_recipients = smtp.send_message(
                 message,
                 from_addr=smtp_settings.sender,
-                to_addrs=smtp_settings.recipients,
+                to_addrs=message_recipients,
             )
     except smtplib.SMTPAuthenticationError as error:
         raise SmtpAuthenticationError("SMTP authentication was rejected.") from error

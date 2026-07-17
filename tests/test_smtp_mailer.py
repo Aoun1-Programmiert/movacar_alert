@@ -50,6 +50,34 @@ def test_send_html_email_uses_all_settings_and_reports_success(
 
 
 @patch("src.mailer.smtp_mailer.smtplib.SMTP")
+def test_send_html_email_uses_explicit_trip_recipients(
+    smtp_constructor: MagicMock, smtp_settings: SmtpSettings
+) -> None:
+    smtp = smtp_constructor.return_value.__enter__.return_value
+    smtp.send_message.return_value = {}
+
+    send_html_email(
+        smtp_settings,
+        "<p>Reiseangebote</p>",
+        recipients=("trip@example.test",),
+    )
+
+    message = smtp.send_message.call_args.args[0]
+    assert message["To"] == "trip@example.test"
+    assert smtp.send_message.call_args.kwargs["to_addrs"] == ("trip@example.test",)
+
+
+@patch("src.mailer.smtp_mailer.smtplib.SMTP")
+def test_send_html_email_rejects_explicit_empty_recipients(
+    smtp_constructor: MagicMock, smtp_settings: SmtpSettings
+) -> None:
+    with pytest.raises(ValueError, match="recipient"):
+        send_html_email(smtp_settings, "<p>HTML</p>", recipients=())
+
+    smtp_constructor.assert_not_called()
+
+
+@patch("src.mailer.smtp_mailer.smtplib.SMTP")
 def test_send_html_email_without_tls_skips_starttls(
     smtp_constructor: MagicMock, smtp_settings: SmtpSettings
 ) -> None:

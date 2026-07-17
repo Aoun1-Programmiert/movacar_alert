@@ -6,7 +6,7 @@ from collections.abc import Iterable
 import logging
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from math import isfinite
 from pathlib import Path
 
@@ -706,6 +706,71 @@ class SQLiteStore:
             ) from exc
 
         return cursor.rowcount
+
+    def has_trip_overview_slot(
+        self, trip_id: str, local_date: date, slot_hour: int
+    ) -> bool:
+        """Return whether a trip overview was successfully sent for this slot."""
+
+        trip_id, local_date, slot_hour = self._validate_overview_slot(
+            trip_id, local_date, slot_hour
+        )
+        try:
+            with sqlite3.connect(self.database_path) as connection:
+                self._require_trip(connection, trip_id)
+                row = connection.execute(
+                    """
+                    SELECT 1
+                    FROM trip_overview_slots
+                    WHERE trip_id = ? AND local_date = ? AND slot_hour = ?
+                    """,
+                    (trip_id, local_date.isoformat(), slot_hour),
+                ).fetchone()
+        except sqlite3.Error as exc:
+            LOGGER.error("SQLite trip overview slot read failed: %s", exc)
+            raise SQLiteStoreError(
+                f"Could not read overview slot for trip {trip_id!r}."
+            ) from exc
+        return row is not None
+
+    def mark_trip_overview_slot_sent(
+        self, trip_id: str, local_date: date, slot_hour: int
+    ) -> bool:
+        """Persist a successful trip overview slot without overwriting history."""
+
+        trip_id, local_date, slot_hour = self._validate_overview_slot(
+            trip_id, local_date, slot_hour
+        )
+        try:
+            with sqlite3.connect(self.database_path) as connection:
+                connection.execute("PRAGMA foreign_keys = ON")
+                connection.execute("BEGIN IMMEDIATE")
+                self._require_trip(connection, trip_id)
+                cursor = connection.execute(
+                    """
+                    INSERT OR IGNORE INTO trip_overview_slots (
+                        trip_id, local_date, slot_hour
+                    ) VALUES (?, ?, ?)
+                    """,
+                    (trip_id, local_date.isoformat(), slot_hour),
+                )
+        except sqlite3.Error as exc:
+            LOGGER.error("SQLite trip overview slot write failed: %s", exc)
+            raise SQLiteStoreError(
+                f"Could not persist overview slot for trip {trip_id!r}."
+            ) from exc
+        return cursor.rowcount == 1
+
+    @staticmethod
+    def _validate_overview_slot(
+        trip_id: str, local_date: date, slot_hour: int
+    ) -> tuple[str, date, int]:
+        trip_id = validate_trip_id(trip_id)
+        if not isinstance(local_date, date) or isinstance(local_date, datetime):
+            raise ValueError("local_date must be a date.")
+        if isinstance(slot_hour, bool) or slot_hour not in (9, 21):
+            raise ValueError("slot_hour must be a configured summary hour.")
+        return trip_id, local_date, slot_hour
 
     def purge_unavailable_trip_offers(self, *, now: datetime | None = None) -> int:
         """Remove unavailable relations older than 14 days and their orphaned offers."""
