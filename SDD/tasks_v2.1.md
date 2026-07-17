@@ -43,9 +43,18 @@ Matching-, Empfänger- und Highlighting-Logik wird abgelöst.
 
 ## 5. Task-Liste
 
+### Aufwand- und Relevanzkategorien
+
+| Kategorie | Einordnung |
+|---|---|
+| Luna | Niedriger bis überschaubarer Aufwand oder klar abgegrenzter Systembeitrag. |
+| Terra | Mittlerer Aufwand und relevante, aber isoliert umsetzbare Systemfunktion. |
+| Sol | Außergewöhnlich hoher Aufwand und zugleich zentral für den vollständigen Zielablauf. |
+
 ### T01 - Reise- und Zuordnungsdomänenmodell definieren
 
 **Workstream:** WS1  
+**Kategorie:** Luna  
 **Beschreibung:** Die reinen Domänenobjekte für Reise, Reiseempfänger,
 reisebezogene Angebotsansicht und explizite Distanzstufe festlegen. Das globale
 `Offer` bleibt eine unveränderliche API-Repräsentation und enthält keine
@@ -65,6 +74,7 @@ reise- oder versandspezifischen Attribute.
 ### T02 - Versioniertes SQLite-Migrationsfundament einführen
 
 **Workstream:** WS1  
+**Kategorie:** Terra  
 **Beschreibung:** Einen additiven, transaktionalen und idempotenten
 Migrationsablauf mit Migrationsmetadaten innerhalb der SQLite-Grenze
 definieren und bereitstellen.
@@ -84,6 +94,7 @@ definieren und bereitstellen.
 ### T03 - Reiseschema und referenzielle Integrität migrieren
 
 **Workstream:** WS1  
+**Kategorie:** Terra  
 **Beschreibung:** Die Tabellen für Reisen, Empfänger, Reise-Angebot-Zuordnungen
 und Übersichtsslots samt eindeutigen Schlüsseln und referenzieller Integrität
 als versionierte Migration spezifizieren.
@@ -102,6 +113,7 @@ als versionierte Migration spezifizieren.
 ### T04 - Bestehende Angebotshistorie migrationssicher übernehmen
 
 **Workstream:** WS1  
+**Kategorie:** Terra  
 **Beschreibung:** Die vorhandene globale Angebotstabelle in die Zielhistorie
 überführen, ohne Bestandsangebote künstlich Reisen zuzuordnen oder rückwirkend
 als versandpflichtig zu behandeln.
@@ -119,6 +131,7 @@ als versandpflichtig zu behandeln.
 ### T05 - Reise- und Empfänger-Repository bereitstellen
 
 **Workstream:** WS2  
+**Kategorie:** Terra  
 **Beschreibung:** Die transaktionalen Persistenzoperationen zum Anlegen,
 Löschen und Auflisten von Reisen sowie zum Hinzufügen, Entfernen und Auflisten
 von Reiseempfängern abgrenzen.
@@ -137,6 +150,7 @@ von Reiseempfängern abgrenzen.
 ### T06 - Reise- und Empfängervalidierung bereitstellen
 
 **Workstream:** WS2  
+**Kategorie:** Luna  
 **Beschreibung:** Fachliche Validierung für Namen, Pick-up-Zeiträume,
 Startstadt, verpflichtende Koordinaten und normalisierte E-Mail-Adressen
 festlegen.
@@ -155,6 +169,7 @@ festlegen.
 ### T07 - Verwaltungs-CLI für Reisen bereitstellen
 
 **Workstream:** WS2  
+**Kategorie:** Terra  
 **Beschreibung:** Die CLI-Unterbefehle zum Anlegen, Löschen und Auflisten von
 Reisen mit lesbarer und optionaler JSON-Ausgabe umsetzen.
 
@@ -171,6 +186,7 @@ Reisen mit lesbarer und optionaler JSON-Ausgabe umsetzen.
 ### T08 - Verwaltungs-CLI für Empfänger bereitstellen
 
 **Workstream:** WS2  
+**Kategorie:** Luna  
 **Beschreibung:** Die CLI-Unterbefehle zum Hinzufügen, Entfernen und
 Auflisten von Reiseempfängern ergänzen.
 
@@ -187,6 +203,7 @@ Auflisten von Reiseempfängern ergänzen.
 ### T09 - Reisezeitraum in Movacar-Requests integrieren
 
 **Workstream:** WS3  
+**Kategorie:** Luna  
 **Beschreibung:** Den Movacar-Client so erweitern, dass er den Pick-up-Zeitraum
 einer Reise in die bestätigten API-Start- und Endparameter übersetzt. Bestehende
 Retries gelten weiterhin für jeden einzelnen Reise-Request.
@@ -206,6 +223,7 @@ Retries gelten weiterhin für jeden einzelnen Reise-Request.
 ### T10 - Distanzdienst und Distanzstufen bereitstellen
 
 **Workstream:** WS3  
+**Kategorie:** Luna  
 **Beschreibung:** Einen reinen Distanzdienst für die Haversine-Berechnung und
 die Klassifikation der verbindlichen Distanzstufen bereitstellen.
 
@@ -223,6 +241,7 @@ die Klassifikation der verbindlichen Distanzstufen bereitstellen.
 ### T11 - Reisebezogene Angebots-Synchronisierung etablieren
 
 **Workstream:** WS3  
+**Kategorie:** Sol  
 **Beschreibung:** Nach einer vollständig erfolgreichen Parser-Antwort globale
 Angebote upserten, Reise-Angebot-Zuordnungen erzeugen oder aktualisieren und
 die Distanz je Reise atomar speichern.
@@ -241,6 +260,7 @@ die Distanz je Reise atomar speichern.
 ### T12 - Reisebezogenen Verfügbarkeitsabgleich absichern
 
 **Workstream:** WS3  
+**Kategorie:** Terra  
 **Beschreibung:** Nach einem erfolgreichen vollständigen Reise-Poll die nicht
 gelieferten Zuordnungen genau dieser Reise als nicht verfügbar markieren; bei
 HTTP-, API- oder Parserfehlern darf sich deren Zustand nicht ändern.
@@ -259,6 +279,7 @@ HTTP-, API- oder Parserfehlern darf sich deren Zustand nicht ändern.
 ### T13 - Versandstatus und Zuordnungs-Retention verwalten
 
 **Workstream:** WS3  
+**Kategorie:** Terra  
 **Beschreibung:** Den Versandstatus nur nach erfolgreicher SMTP-Übergabe
 persistieren und nicht verfügbare Reise-Angebot-Zuordnungen nach 14 Tagen
 bereinigen, ohne noch referenzierte globale Angebote zu löschen.
@@ -277,6 +298,7 @@ bereinigen, ohne noch referenzierte globale Angebote zu löschen.
 ### T14 - Reise-Mailansicht und Angebotsabfragen bereitstellen
 
 **Workstream:** WS4  
+**Kategorie:** Terra  
 **Beschreibung:** Die Abfragen und die vorbereitete Mailansicht für neue,
 verfügbare und unversendete Reise-Angebot-Zuordnungen bereitstellen.
 
@@ -294,6 +316,7 @@ verfügbare und unversendete Reise-Angebot-Zuordnungen bereitstellen.
 ### T15 - Sofortbenachrichtigungen reisebasiert versenden
 
 **Workstream:** WS4  
+**Kategorie:** Sol  
 **Beschreibung:** Nach erfolgreicher Reise-Synchronisierung eine
 Sofortbenachrichtigung mit neuen Angeboten zuerst und allen verfügbaren
 Angeboten anschließend ausschließlich an die Empfänger dieser Reise senden.
@@ -312,6 +335,7 @@ Angeboten anschließend ausschließlich an die Empfänger dieser Reise senden.
 ### T16 - Reisebezogene Übersichten mit Slot-Persistenz versenden
 
 **Workstream:** WS4  
+**Kategorie:** Terra  
 **Beschreibung:** Die bisherigen Übersichtszeitpunkte 09:00 und 21:00 in
 `Europe/Berlin` pro Reise mit persistentem, erst nach erfolgreichem Versand
 gesetztem Slot-Zustand umsetzen.
@@ -330,6 +354,7 @@ gesetztem Slot-Zustand umsetzen.
 ### T17 - Mail-Templates auf Reiseinformationen und Distanz umstellen
 
 **Workstream:** WS4  
+**Kategorie:** Luna  
 **Beschreibung:** Beide Mailtypen auf die vorbereitete Reise-Mailansicht
 umstellen: Reiseinformationen, neue Angebote zuerst, alle verfügbaren Angebote
 danach sowie die drei Distanzdarstellungen.
@@ -349,6 +374,7 @@ danach sowie die drei Distanzdarstellungen.
 ### T18 - SMTP- und Settings-Vertrag bereinigen
 
 **Workstream:** WS5  
+**Kategorie:** Luna  
 **Beschreibung:** Globale fachliche Empfänger und die alte
 Deutschland-Bounding-Box aus dem aktiven Settings-Vertrag entfernen. Gmail SMTP
 nutzt Verbindung, Absender und ein App-Passwort; vorhandene Legacy-Werte werden
@@ -368,6 +394,7 @@ sichtbar protokolliert.
 ### T19 - Polling-Loop zum fehlerisolierten Reise-Orchestrator umbauen
 
 **Workstream:** WS5  
+**Kategorie:** Sol  
 **Beschreibung:** Den globalen Polling-Ablauf durch einen sequenziellen
 Reise-Orchestrator ersetzen, der Reisen lädt, pro Reise abfragt,
 synchronisiert und benachrichtigt sowie Fehler isoliert protokolliert.
@@ -386,6 +413,7 @@ synchronisiert und benachrichtigt sowie Fehler isoliert protokolliert.
 ### T20 - Alte globale Matching- und Highlightpfade entfernen
 
 **Workstream:** WS5  
+**Kategorie:** Terra  
 **Beschreibung:** Den globalen Delta-, Deutschland-Bounding-Box- und
 Dauerhighlightpfad kontrolliert aus dem Produktionsfluss und den aktiven
 Verträgen entfernen.
@@ -404,6 +432,7 @@ Verträgen entfernen.
 ### T21 - Bestehende Tests auf Reiseverträge umstellen
 
 **Workstream:** WS6  
+**Kategorie:** Terra  
 **Beschreibung:** Tests für ausschließlich entfallene globale Fachlichkeit
 entfernen oder ersetzen. Bestehende Parser-, Retry-, Zeitzonen-, SMTP-Transport-
 und Logging-Grundverträge bleiben erhalten und werden um den Reisekontext
@@ -422,6 +451,7 @@ ergänzt.
 ### T22 - Unit-Tests für neue Reiseverträge ergänzen
 
 **Workstream:** WS6  
+**Kategorie:** Terra  
 **Beschreibung:** Die im Plan geforderten Unit-Tests für Migration, Verwaltung,
 Distanz, Zuordnung, Verfügbarkeit, Versand, Retention, API-Requestbildung,
 Templates, Übersichtsslots und Legacy-Hinweise ergänzen.
@@ -439,6 +469,7 @@ Templates, Übersichtsslots und Legacy-Hinweise ergänzen.
 ### T23 - Hermetischen Reise-E2E-Test erstellen
 
 **Workstream:** WS6  
+**Kategorie:** Sol  
 **Beschreibung:** Einen End-to-End-Test mit isolierter SQLite-Datenbank sowie
 Movacar- und SMTP-Doubles bereitstellen, der den vollständigen reisebasierten
 Ablauf abdeckt.
@@ -458,6 +489,7 @@ Ablauf abdeckt.
 ### T24 - Betriebs- und Nutzungsdokumentation aktualisieren
 
 **Workstream:** WS6  
+**Kategorie:** Luna  
 **Beschreibung:** Die Projektdokumentation auf Reiseverwaltung, CLI,
 Koordinatenpflicht, Migration, Gmail-App-Passwort, Legacy-Hinweise, Leerlauf
 und reisebezogenes Mailverhalten aktualisieren.
