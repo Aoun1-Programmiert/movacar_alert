@@ -11,6 +11,8 @@ from pathlib import Path
 
 from src.config.timezone import LOCAL_TIMEZONE
 from src.models.offer import Offer
+from src.models.trip import Trip, TripRecipient
+from src.validation.trip_validation import normalize_email, validate_trip_id
 
 LOGGER = logging.getLogger("movacar_alert.storage.sqlite_store")
 
@@ -31,6 +33,14 @@ _OFFERS_COLUMNS = {
 
 class SQLiteStoreError(RuntimeError):
     """Raised when a database operation cannot be completed."""
+
+
+class TripNotFoundError(SQLiteStoreError):
+    """Raised when a requested trip does not exist."""
+
+
+class DuplicateTripRecipientError(SQLiteStoreError):
+    """Raised when a recipient is already assigned to a trip."""
 
 
 @dataclass(frozen=True)
@@ -231,6 +241,156 @@ class SQLiteStore:
             )
             for row in rows
         }
+
+    def create_trip(self, trip: Trip) -> None:
+        """Persist a trip configuration."""
+
+        if not isinstance(trip, Trip):
+            raise ValueError("create_trip accepts only a valid Trip instance.")
+
+        try:
+            with sqlite3.connect(self.database_path) as connection:
+                connection.execute(
+                    """
+                    INSERT INTO trips (
+                        trip_id, name, pickup_start, pickup_end, start_city,
+                        latitude, longitude
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        trip.trip_id,
+                        trip.name,
+                        trip.pickup_start.isoformat(),
+                        trip.pickup_end.isoformat(),
+                        trip.start_city,
+                        trip.latitude,
+                        trip.longitude,
+                    ),
+                )
+        except sqlite3.Error as exc:
+            LOGGER.error("SQLite trip creation failed: %s", exc)
+            raise SQLiteStoreError("Could not create trip in SQLite.") from exc
+
+    def list_trips(self) -> list[Trip]:
+        """Return all persisted trips ordered by their stable identity."""
+
+        try:
+            with sqlite3.connect(self.database_path) as connection:
+                rows = connection.execute(
+                    """
+                    SELECT trip_id, name, pickup_start, pickup_end, start_city,
+                           latitude, longitude
+                    FROM trips
+                    ORDER BY trip_id
+                    """
+                ).fetchall()
+        except sqlite3.Error as exc:
+            LOGGER.error("SQLite trip listing failed: %s", exc)
+            raise SQLiteStoreError("Could not list trips from SQLite.") from exc
+
+        return [
+            Trip(
+                trip_id=row[0],
+                name=row[1],
+                pickup_start=datetime.fromisoformat(row[2]).date(),
+                pickup_end=datetime.fromisoformat(row[3]).date(),
+                start_city=row[4],
+                latitude=row[5],
+                longitude=row[6],
+            )
+            for row in rows
+        ]
+
+    def delete_trip(self, trip_id: str) -> None:
+        """Delete one trip and all of its trip-scoped state."""
+
+        trip_id = validate_trip_id(trip_id)
+        try:
+            with sqlite3.connect(self.database_path) as connection:
+                connection.execute("PRAGMA foreign_keys = ON")
+                cursor = connection.execute(
+                    "DELETE FROM trips WHERE trip_id = ?", (trip_id,)
+                )
+                if cursor.rowcount == 0:
+                    raise TripNotFoundError(f"Trip {trip_id!r} does not exist.")
+        except sqlite3.Error as exc:
+            LOGGER.error("SQLite trip deletion failed: %s", exc)
+            raise SQLiteStoreError("Could not delete trip from SQLite.") from exc
+
+    def add_trip_recipient(self, trip_id: str, normalized_email: str) -> None:
+        """Assign one normalized recipient address to an existing trip."""
+
+        trip_id = validate_trip_id(trip_id)
+        normalized_email = normalize_email(normalized_email)
+        try:
+            with sqlite3.connect(self.database_path) as connection:
+                connection.execute("PRAGMA foreign_keys = ON")
+                connection.execute("BEGIN IMMEDIATE")
+                self._require_trip(connection, trip_id)
+                try:
+                    connection.execute(
+                        """
+                        INSERT INTO trip_recipients (trip_id, normalized_email)
+                        VALUES (?, ?)
+                        """,
+                        (trip_id, normalized_email),
+                    )
+                except sqlite3.IntegrityError as exc:
+                    raise DuplicateTripRecipientError(
+                        f"Recipient {normalized_email!r} already belongs to trip {trip_id!r}."
+                    ) from exc
+        except sqlite3.Error as exc:
+            LOGGER.error("SQLite trip recipient creation failed: %s", exc)
+            raise SQLiteStoreError("Could not add trip recipient in SQLite.") from exc
+
+    def remove_trip_recipient(self, trip_id: str, normalized_email: str) -> None:
+        """Remove one recipient assignment from an existing trip."""
+
+        trip_id = validate_trip_id(trip_id)
+        normalized_email = normalize_email(normalized_email)
+        try:
+            with sqlite3.connect(self.database_path) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                self._require_trip(connection, trip_id)
+                connection.execute(
+                    """
+                    DELETE FROM trip_recipients
+                    WHERE trip_id = ? AND normalized_email = ?
+                    """,
+                    (trip_id, normalized_email),
+                )
+        except sqlite3.Error as exc:
+            LOGGER.error("SQLite trip recipient deletion failed: %s", exc)
+            raise SQLiteStoreError("Could not remove trip recipient from SQLite.") from exc
+
+    def list_trip_recipients(self, trip_id: str) -> list[TripRecipient]:
+        """Return the recipients assigned to one existing trip."""
+
+        trip_id = validate_trip_id(trip_id)
+        try:
+            with sqlite3.connect(self.database_path) as connection:
+                self._require_trip(connection, trip_id)
+                rows = connection.execute(
+                    """
+                    SELECT trip_id, normalized_email
+                    FROM trip_recipients
+                    WHERE trip_id = ?
+                    ORDER BY normalized_email
+                    """,
+                    (trip_id,),
+                ).fetchall()
+        except sqlite3.Error as exc:
+            LOGGER.error("SQLite trip recipient listing failed: %s", exc)
+            raise SQLiteStoreError("Could not list trip recipients from SQLite.") from exc
+
+        return [TripRecipient(trip_id=row[0], normalized_email=row[1]) for row in rows]
+
+    @staticmethod
+    def _require_trip(connection: sqlite3.Connection, trip_id: str) -> None:
+        if connection.execute(
+            "SELECT 1 FROM trips WHERE trip_id = ?", (trip_id,)
+        ).fetchone() is None:
+            raise TripNotFoundError(f"Trip {trip_id!r} does not exist.")
 
     def insert_offers(self, offers: Iterable[Offer]) -> None:
         """Persist valid offers and reactivate previously soft-deleted ones."""

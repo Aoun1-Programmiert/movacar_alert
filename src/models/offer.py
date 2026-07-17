@@ -8,6 +8,15 @@ from math import isfinite
 from enum import Enum
 from typing import Literal
 
+from src.validation.trip_validation import (
+    normalize_email,
+    validate_coordinates,
+    validate_pickup_window,
+    validate_start_city,
+    validate_trip_id,
+    validate_trip_name,
+)
+
 
 @dataclass(frozen=True)
 class GeoLocation:
@@ -113,23 +122,13 @@ class Trip:
     longitude: float
 
     def __post_init__(self) -> None:
-        if not isinstance(self.trip_id, str) or not self.trip_id.strip():
-            raise ValueError("Trip trip_id must not be empty.")
-        if not isinstance(self.name, str) or not self.name.strip():
-            raise ValueError("Trip name must not be empty.")
-        if (
-            not isinstance(self.pickup_start, date)
-            or isinstance(self.pickup_start, datetime)
-            or not isinstance(self.pickup_end, date)
-            or isinstance(self.pickup_end, datetime)
-        ):
-            raise ValueError("Trip pickup dates must be date values.")
-        if self.pickup_end < self.pickup_start:
-            raise ValueError("Trip pickup_end must not be before pickup_start.")
-        if not isinstance(self.start_city, str) or not self.start_city.strip():
-            raise ValueError("Trip start_city must not be empty.")
-        _validate_coordinate(self.latitude, -90, 90, "Trip latitude")
-        _validate_coordinate(self.longitude, -180, 180, "Trip longitude")
+        object.__setattr__(self, "trip_id", validate_trip_id(self.trip_id))
+        object.__setattr__(self, "name", validate_trip_name(self.name))
+        object.__setattr__(self, "start_city", validate_start_city(self.start_city))
+        validate_pickup_window(self.pickup_start, self.pickup_end)
+        latitude, longitude = validate_coordinates(self.latitude, self.longitude)
+        object.__setattr__(self, "latitude", latitude)
+        object.__setattr__(self, "longitude", longitude)
 
 
 @dataclass(frozen=True)
@@ -140,10 +139,8 @@ class TripRecipient:
     normalized_email: str
 
     def __post_init__(self) -> None:
-        if not isinstance(self.trip_id, str) or not self.trip_id.strip():
-            raise ValueError("TripRecipient trip_id must not be empty.")
-        if not isinstance(self.normalized_email, str) or not self.normalized_email.strip():
-            raise ValueError("TripRecipient normalized_email must not be empty.")
+        object.__setattr__(self, "trip_id", validate_trip_id(self.trip_id))
+        object.__setattr__(self, "normalized_email", normalize_email(self.normalized_email))
 
 
 @dataclass(frozen=True)
@@ -204,13 +201,3 @@ class TripOfferView:
 
 
 TripOffer = TripOfferView
-
-
-def _validate_coordinate(value: object, minimum: int, maximum: int, field: str) -> None:
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, (int, float))
-        or not isfinite(value)
-        or not minimum <= value <= maximum
-    ):
-        raise ValueError(f"{field} must be between {minimum} and {maximum}.")
