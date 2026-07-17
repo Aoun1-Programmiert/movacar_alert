@@ -33,8 +33,8 @@ def test_source_modules_import_in_fresh_venv(tmp_path: Path) -> None:
                 "import src.api.api_client, src.config.settings, "
                 "src.admin_cli, "
                 "src.loop.poll_loop, src.mailer.smtp_mailer, "
-                "src.matcher.offer_matcher, src.models.offer, "
-                "src.parser.offer_parser, src.storage.sqlite_store"
+                "src.models.offer, src.parser.offer_parser, "
+                "src.storage.sqlite_store"
             ),
         ],
         cwd=PROJECT_ROOT,

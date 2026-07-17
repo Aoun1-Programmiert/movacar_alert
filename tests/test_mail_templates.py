@@ -1,6 +1,6 @@
 """Unit tests for the trip-scoped HTML mail templates."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import pytest
 
@@ -28,15 +28,18 @@ def make_view(
     state: str = "new",
     is_sent: bool = False,
     trip: Trip | None = None,
+    duration: timedelta = timedelta(days=2),
+    origin: GeoLocation | None = None,
 ) -> TripOfferView:
+    start_date = datetime(2026, 7, 20, 8)
     return TripOfferView(
         trip=trip or make_trip(),
         offer=Offer(
             id=offer_id,
-            start_date=datetime(2026, 7, 20, 8),
-            end_date=datetime(2026, 7, 22, 8),
+            start_date=start_date,
+            end_date=start_date + duration,
             free_km=500,
-            origin=GeoLocation("Potsdam", 52.4, 13.1),
+            origin=origin or GeoLocation("Potsdam", 52.4, 13.1),
             destination=GeoLocation("Paris", 48.8566, 2.3522),
         ),
         distance_km=distance_km,
@@ -89,6 +92,20 @@ def test_template_renders_all_distance_tiers(
 
     assert f'class="offer {offer_class}"' in html
     assert f'class="{distance_class}"' in html
+
+
+def test_template_uses_trip_distance_tier_without_legacy_duration_or_country_rules() -> None:
+    view = make_view(
+        "short-domestic",
+        99,
+        duration=timedelta(hours=1),
+        origin=GeoLocation("Paris", 48.8566, 2.3522),
+    )
+
+    html = render_offer_email(TripMailView(make_trip(), ("a@example.test",), (view,), (view,)))
+
+    assert 'class="offer offer--green"' in html
+    assert 'class="distance--green"' in html
 
 
 def test_summary_contains_trip_and_distance_without_new_offer_classification() -> None:

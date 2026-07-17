@@ -11,8 +11,6 @@ EXPECTED_MODULES = (
     "src.config.settings",
     "src.api.api_client",
     "src.parser.offer_parser",
-    "src.matcher.offer_matcher",
-    "src.matcher.geo_rules",
     "src.storage.sqlite_store",
     "src.mailer.smtp_mailer",
     "src.mailer.templates",
@@ -28,8 +26,6 @@ def test_plan_source_layout_exists() -> None:
         "config/settings.py",
         "api/api_client.py",
         "parser/offer_parser.py",
-        "matcher/offer_matcher.py",
-        "matcher/geo_rules.py",
         "storage/sqlite_store.py",
         "mailer/smtp_mailer.py",
         "mailer/templates.py",
@@ -40,6 +36,8 @@ def test_plan_source_layout_exists() -> None:
     )
 
     assert all((SRC_ROOT / path).is_file() for path in expected_paths)
+    assert not (SRC_ROOT / "matcher" / "offer_matcher.py").is_file()
+    assert not (SRC_ROOT / "matcher" / "geo_rules.py").is_file()
 
 
 def test_domain_modules_are_importable() -> None:

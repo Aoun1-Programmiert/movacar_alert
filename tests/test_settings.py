@@ -68,6 +68,9 @@ def test_load_settings_ignores_legacy_settings_without_validating_them(
             "POLL_INTERVAL_MINUTES": "20",
             "SMTP_TO": "not-an-email-list",
             "DE_BBOX_MIN_LAT": "not-a-number",
+            "DE_BBOX_MAX_LAT": "not-a-number",
+            "DE_BBOX_MIN_LON": "not-a-number",
+            "DE_BBOX_MAX_LON": "not-a-number",
             "LOG_FILE_PATH": "./var/movacar.log",
         }
     )
@@ -77,8 +80,14 @@ def test_load_settings_ignores_legacy_settings_without_validating_them(
 
     assert settings.poll_interval_minutes == 20
     assert settings.log_file_path == Path("./var/movacar.log")
-    assert "SMTP_TO" in caplog.text
-    assert "DE_BBOX_MIN_LAT" in caplog.text
+    for legacy_name in (
+        "SMTP_TO",
+        "DE_BBOX_MIN_LAT",
+        "DE_BBOX_MAX_LAT",
+        "DE_BBOX_MIN_LON",
+        "DE_BBOX_MAX_LON",
+    ):
+        assert legacy_name in caplog.text
 
 
 @pytest.mark.parametrize(

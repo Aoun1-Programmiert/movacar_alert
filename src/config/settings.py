@@ -12,24 +12,10 @@ from urllib.parse import urlparse
 
 
 DEFAULT_POLL_INTERVAL_MINUTES = 15
-DEFAULT_DE_BBOX_MIN_LAT = 47.2701114
-DEFAULT_DE_BBOX_MAX_LAT = 55.058347
-DEFAULT_DE_BBOX_MIN_LON = 5.8663425
-DEFAULT_DE_BBOX_MAX_LON = 15.0418962
 
 
 class SettingsValidationError(ValueError):
     """Raised when runtime settings are missing or malformed."""
-
-
-@dataclass(frozen=True)
-class BoundingBox:
-    """Legacy geographic bounds kept for standalone matcher compatibility."""
-
-    min_lat: float
-    max_lat: float
-    min_lon: float
-    max_lon: float
 
 
 @dataclass(frozen=True)
@@ -129,39 +115,6 @@ def _required(values: Mapping[str, str], name: str) -> str:
     return value
 
 
-def _load_bbox(values: Mapping[str, str]) -> BoundingBox:
-    """Load legacy matcher bounds; runtime Settings no longer uses them."""
-    variable_names = (
-        "DE_BBOX_MIN_LAT",
-        "DE_BBOX_MAX_LAT",
-        "DE_BBOX_MIN_LON",
-        "DE_BBOX_MAX_LON",
-    )
-    provided_names = [name for name in variable_names if values.get(name, "").strip()]
-    if provided_names and len(provided_names) != len(variable_names):
-        missing_names = ", ".join(name for name in variable_names if name not in provided_names)
-        raise SettingsValidationError(
-            f"DE bounding-box overrides must be specified together; missing: {missing_names}."
-        )
-    bbox = BoundingBox(
-        min_lat=_legacy_float_or_default(
-            values.get("DE_BBOX_MIN_LAT"), DEFAULT_DE_BBOX_MIN_LAT, "DE_BBOX_MIN_LAT"
-        ),
-        max_lat=_legacy_float_or_default(
-            values.get("DE_BBOX_MAX_LAT"), DEFAULT_DE_BBOX_MAX_LAT, "DE_BBOX_MAX_LAT"
-        ),
-        min_lon=_legacy_float_or_default(
-            values.get("DE_BBOX_MIN_LON"), DEFAULT_DE_BBOX_MIN_LON, "DE_BBOX_MIN_LON"
-        ),
-        max_lon=_legacy_float_or_default(
-            values.get("DE_BBOX_MAX_LON"), DEFAULT_DE_BBOX_MAX_LON, "DE_BBOX_MAX_LON"
-        ),
-    )
-    if bbox.min_lat >= bbox.max_lat or bbox.min_lon >= bbox.max_lon:
-        raise SettingsValidationError("DE bounding-box minimum values must be lower than maximum values.")
-    return bbox
-
-
 def _validate_http_url(value: str, name: str) -> None:
     parsed = urlparse(value)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -202,18 +155,6 @@ def _boolean(value: str, name: str) -> bool:
     if normalized_value == "false":
         return False
     raise SettingsValidationError(f"{name} must be either true or false.")
-
-
-def _legacy_float_or_default(value: str | None, default: float, name: str) -> float:
-    if value is None or not value.strip():
-        return default
-    try:
-        parsed = float(value)
-    except ValueError as error:
-        raise SettingsValidationError(f"{name} must be a number.") from error
-    if not isfinite(parsed):
-        raise SettingsValidationError(f"{name} must be a finite number.")
-    return parsed
 
 
 def _optional_path(value: str | None) -> Path | None:
