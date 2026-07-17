@@ -1,9 +1,8 @@
-"""Unit tests for polling-cycle orchestration."""
+"""Unit tests for trip-scoped polling orchestration."""
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -11,364 +10,336 @@ import pytest
 from src.api.api_client import ApiNetworkError
 from src.config.timezone import LOCAL_TIMEZONE
 from src.loop import poll_loop
-from src.logging.logger import configure_logger
 from src.mailer.smtp_mailer import SmtpTransportError
-from src.models.offer import GeoLocation, Offer
+from src.models.offer import GeoLocation, Offer, Trip
 from src.parser.offer_parser import OfferParsingError
 from src.storage.sqlite_store import SQLiteStoreError
 
 
 class FakeStore:
-    """In-memory storage spy for orchestration tests."""
+    """Storage spy exposing only the orchestration boundary."""
 
-    def __init__(self, known: dict[str, object] | None = None) -> None:
-        self.known = {} if known is None else known
+    def __init__(self, trips: list[Trip] | None = None) -> None:
+        self.trips = [] if trips is None else trips
         self.calls: list[object] = []
 
-    def read_offers(self) -> dict[str, object]:
-        self.calls.append("read")
-        return self.known
+    def list_trips(self) -> list[Trip]:
+        self.calls.append("list_trips")
+        return self.trips
 
-    def insert_offers(self, offers: object) -> None:
-        self.calls.append(("insert", tuple(offer.id for offer in offers)))
-
-    def soft_delete_removed_offers(self, active_ids: object) -> int:
-        self.calls.append(("soft_delete", tuple(active_ids)))
-        return 1
-
-    def purge_soft_deleted_offers(self) -> int:
-        self.calls.append("purge")
-        return 1
+    def purge_unavailable_trip_offers(self, *, now: datetime) -> int:
+        self.calls.append(("purge", now))
+        return 0
 
 
 @pytest.fixture
 def settings() -> SimpleNamespace:
-    return SimpleNamespace(
-        de_bbox=None,
-        smtp=object(),
-        poll_interval_minutes=15,
-    )
+    return SimpleNamespace(smtp=object(), poll_interval_minutes=15)
+
+
+@pytest.fixture
+def trips() -> list[Trip]:
+    return [
+        Trip(
+            trip_id="trip-1",
+            name="Sommerfahrt",
+            pickup_start=date(2026, 7, 20),
+            pickup_end=date(2026, 7, 25),
+            start_city="Berlin",
+            latitude=52.52,
+            longitude=13.405,
+        ),
+        Trip(
+            trip_id="trip-2",
+            name="Herbstfahrt",
+            pickup_start=date(2026, 9, 1),
+            pickup_end=date(2026, 9, 5),
+            start_city="München",
+            latitude=48.1372,
+            longitude=11.5756,
+        ),
+    ]
 
 
 @pytest.fixture
 def offer() -> Offer:
-    start = datetime(2026, 7, 14, 8, tzinfo=timezone.utc)
+    start = datetime(2026, 7, 20, 8, tzinfo=timezone.utc)
     return Offer(
-        id="new-offer",
+        id="offer-1",
         start_date=start,
         end_date=start + timedelta(days=2),
         free_km=500,
-        origin=GeoLocation("Berlin", 52.52, 13.405),
+        origin=GeoLocation("Hamburg", 53.5511, 9.9937),
         destination=GeoLocation("Paris", 48.8566, 2.3522),
     )
 
 
-def _stub_response(monkeypatch: pytest.MonkeyPatch, offer: Offer) -> None:
-    monkeypatch.setattr(poll_loop, "fetch_offers", lambda settings: {"data": [], "included": []})
-    monkeypatch.setattr(poll_loop, "parse_offers", lambda response: [offer])
-
-
-def test_new_offers_are_mailed_before_being_persisted_and_then_cleaned(
-    monkeypatch: pytest.MonkeyPatch, settings: SimpleNamespace, offer: Offer
-) -> None:
-    store = FakeStore()
-    _stub_response(monkeypatch, offer)
-
-    def send(smtp: object, html: str) -> None:
-        store.calls.append("send")
-        assert "Neue Angebote" in html
-
-    monkeypatch.setattr(poll_loop, "send_html_email", send)
-
-    result = poll_loop.run_polling_cycle(settings, store)  # type: ignore[arg-type]
-
-    assert result == poll_loop.PollCycleResult(
-        completed=True, mail_sent=True, new_count=1, existing_count=0, removed_count=0
-    )
-    assert store.calls == [
-        "read",
-        "send",
-        ("insert", ("new-offer",)),
-        ("soft_delete", ("new-offer",)),
-        "purge",
-    ]
-
-
-def test_successful_cycle_logs_summary_before_sleep(
+def _stub_successful_processing(
     monkeypatch: pytest.MonkeyPatch,
-    settings: SimpleNamespace,
-    tmp_path: Path,
+    offer: Offer,
+    events: list[object] | None = None,
 ) -> None:
-    log_path = tmp_path / "movacar.log"
-    monkeypatch.setattr(
-        poll_loop,
-        "LOGGER",
-        configure_logger(log_path, logger_name="movacar_alert.loop.poll_loop"),
-    )
-    monkeypatch.setattr(
-        poll_loop,
-        "run_polling_cycle",
-        lambda settings, store: poll_loop.PollCycleResult(
-            completed=True, mail_sent=True, new_count=2
-        ),
-    )
+    observed = [] if events is None else events
 
-    with pytest.raises(RuntimeError, match="stop test loop"):
-        poll_loop.poll_forever(
-            settings,
-            object(),
-            sleep=lambda seconds: (_ for _ in ()).throw(RuntimeError("stop test loop")),
-            now=lambda: datetime(2026, 7, 14, 8),
-        )
+    def fetch(_settings: object, trip: Trip) -> dict[str, object]:
+        observed.append(("fetch", trip.trip_id))
+        return {"trip_id": trip.trip_id}
 
-    log_line = log_path.read_text(encoding="utf-8")
-    assert "INFO — Erfolgreicher Polling-Durchlauf: 2 neue Angebote gesichtet;" in log_line
-    assert "eine E-Mail versendet. Nächster Durchlauf um " in log_line
+    def parse(response: dict[str, object]) -> list[Offer]:
+        observed.append(("parse", response["trip_id"]))
+        return [offer]
+
+    def synchronize(_store: object, trip: Trip, offers: object) -> object:
+        observed.append(("sync", trip.trip_id, tuple(item.id for item in offers)))
+        return SimpleNamespace(offer_ids=frozenset({offer.id}))
+
+    def notify(_store: object, _smtp: object, trip: Trip, **_kwargs: object) -> bool:
+        observed.append(("instant", trip.trip_id))
+        return True
+
+    def summarize(
+        _store: object,
+        _smtp: object,
+        trip: Trip,
+        _now: datetime,
+        **_kwargs: object,
+    ) -> bool:
+        observed.append(("summary", trip.trip_id))
+        return False
+
+    monkeypatch.setattr(poll_loop, "fetch_offers", fetch)
+    monkeypatch.setattr(poll_loop, "parse_offers", parse)
+    monkeypatch.setattr(poll_loop, "synchronize_trip_offers", synchronize)
+    monkeypatch.setattr(poll_loop, "send_instant_trip_notification", notify)
+    monkeypatch.setattr(poll_loop, "send_due_trip_summary", summarize)
 
 
-def test_no_new_offers_skip_mail_but_still_cleanup_and_purge(
-    monkeypatch: pytest.MonkeyPatch, settings: SimpleNamespace, offer: Offer
+def test_idle_cycle_avoids_http_and_smtp_calls(
+    monkeypatch: pytest.MonkeyPatch, settings: SimpleNamespace
 ) -> None:
-    store = FakeStore(known={offer.id: object(), "removed": object()})
-    _stub_response(monkeypatch, offer)
-    monkeypatch.setattr(
-        poll_loop,
-        "send_html_email",
-        lambda smtp, html: pytest.fail("No email may be sent without new offers."),
-    )
-
-    result = poll_loop.run_polling_cycle(settings, store)  # type: ignore[arg-type]
-
-    assert result == poll_loop.PollCycleResult(
-        completed=True, mail_sent=False, new_count=0, existing_count=1, removed_count=1
-    )
-    assert store.calls == [
-        "read",
-        ("soft_delete", ("new-offer",)),
-        "purge",
-    ]
-
-
-def test_smtp_failure_leaves_new_offers_unpersisted(
-    monkeypatch: pytest.MonkeyPatch, settings: SimpleNamespace, offer: Offer, caplog: pytest.LogCaptureFixture
-) -> None:
-    store = FakeStore()
-    _stub_response(monkeypatch, offer)
-    monkeypatch.setattr(
-        poll_loop,
-        "send_html_email",
-        lambda smtp, html: (_ for _ in ()).throw(SmtpTransportError("rejected")),
-    )
-
-    with caplog.at_level("ERROR"):
-        result = poll_loop.run_polling_cycle(settings, store)  # type: ignore[arg-type]
-
-    assert result == poll_loop.PollCycleResult(
-        completed=True, mail_sent=False, new_count=1, existing_count=0, removed_count=0
-    )
-    assert store.calls == ["read"]
-    assert "mail delivery failed" in caplog.text
-
-
-@pytest.mark.parametrize(
-    ("error", "expected_text"),
-    (
-        (ApiNetworkError("offline"), "fetching or parsing"),
-        (OfferParsingError("malformed"), "fetching or parsing"),
-    ),
-)
-def test_api_and_parser_failures_are_logged_and_abort_only_current_cycle(
-    monkeypatch: pytest.MonkeyPatch,
-    settings: SimpleNamespace,
-    error: Exception,
-    expected_text: str,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+    now = datetime(2026, 7, 17, 8, tzinfo=LOCAL_TIMEZONE)
     store = FakeStore()
     monkeypatch.setattr(
         poll_loop,
         "fetch_offers",
-        lambda settings: (_ for _ in ()).throw(error),
+        lambda *_args: pytest.fail("Idle cycle must not perform HTTP requests."),
+    )
+    monkeypatch.setattr(
+        poll_loop,
+        "send_html_email",
+        lambda *_args, **_kwargs: pytest.fail("Idle cycle must not send email."),
     )
 
-    with caplog.at_level("ERROR"):
-        result = poll_loop.run_polling_cycle(settings, store)  # type: ignore[arg-type]
+    result = poll_loop.run_orchestration_cycle(settings, store, now=now)
 
-    assert result == poll_loop.PollCycleResult(completed=False, mail_sent=False)
-    assert store.calls == []
-    assert expected_text in caplog.text
+    assert result.idle
+    assert result.trip_results == ()
+    assert store.calls == ["list_trips", ("purge", now)]
 
 
-def test_database_errors_are_logged_and_abort_only_current_cycle(
+def test_all_trips_are_processed_sequentially(
     monkeypatch: pytest.MonkeyPatch,
     settings: SimpleNamespace,
+    trips: list[Trip],
+    offer: Offer,
+) -> None:
+    events: list[object] = []
+    store = FakeStore(trips)
+    _stub_successful_processing(monkeypatch, offer, events)
+
+    result = poll_loop.run_orchestration_cycle(
+        settings, store, now=datetime(2026, 7, 17, 8)
+    )
+
+    assert result.completed
+    assert result.completed_trip_count == 2
+    assert [item.trip_id for item in result.trip_results] == ["trip-1", "trip-2"]
+    assert events == [
+        ("fetch", "trip-1"),
+        ("parse", "trip-1"),
+        ("sync", "trip-1", ("offer-1",)),
+        ("instant", "trip-1"),
+        ("summary", "trip-1"),
+        ("fetch", "trip-2"),
+        ("parse", "trip-2"),
+        ("sync", "trip-2", ("offer-1",)),
+        ("instant", "trip-2"),
+        ("summary", "trip-2"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "error",
+    (ApiNetworkError("offline"), OfferParsingError("malformed")),
+)
+def test_fetch_or_parse_failure_is_logged_and_does_not_block_next_trip(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: SimpleNamespace,
+    trips: list[Trip],
+    offer: Offer,
+    error: Exception,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    store = FakeStore(trips)
+    _stub_successful_processing(monkeypatch, offer)
+    original_fetch = poll_loop.fetch_offers
+
+    def fetch(settings: object, trip: Trip) -> object:
+        if trip.trip_id == "trip-1":
+            raise error
+        return original_fetch(settings, trip)
+
+    monkeypatch.setattr(poll_loop, "fetch_offers", fetch)
+
+    with caplog.at_level("ERROR"):
+        result = poll_loop.run_orchestration_cycle(
+            settings, store, now=datetime(2026, 7, 17, 8)
+        )
+
+    assert [item.completed for item in result.trip_results] == [False, True]
+    assert "id=trip-1" in caplog.text
+    assert "name=Sommerfahrt" in caplog.text
+    assert "Abruf/Parsing" in caplog.text
+
+
+def test_database_failure_is_logged_and_does_not_block_next_trip(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: SimpleNamespace,
+    trips: list[Trip],
     offer: Offer,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    _stub_response(monkeypatch, offer)
-    store = FakeStore()
-    monkeypatch.setattr(
-        store,
-        "read_offers",
-        lambda: (_ for _ in ()).throw(SQLiteStoreError("unavailable")),
-    )
+    store = FakeStore(trips)
+    _stub_successful_processing(monkeypatch, offer)
+    original_sync = poll_loop.synchronize_trip_offers
+
+    def synchronize(store: object, trip: Trip, offers: object) -> object:
+        if trip.trip_id == "trip-1":
+            raise SQLiteStoreError("database unavailable")
+        return original_sync(store, trip, offers)
+
+    monkeypatch.setattr(poll_loop, "synchronize_trip_offers", synchronize)
 
     with caplog.at_level("ERROR"):
-        result = poll_loop.run_polling_cycle(settings, store)  # type: ignore[arg-type]
-
-    assert result == poll_loop.PollCycleResult(completed=False, mail_sent=False)
-    assert "reading persisted offers" in caplog.text
-
-
-def test_cycle_converts_dates_to_local_time_before_matching(
-    monkeypatch: pytest.MonkeyPatch, settings: SimpleNamespace, offer: Offer
-) -> None:
-    store = FakeStore()
-    captured: list[Offer] = []
-    _stub_response(monkeypatch, offer)
-
-    def capture_delta(offers: object, known: object, bbox: object) -> object:
-        captured.extend(offers)
-        return SimpleNamespace(
-            new=(),
-            existing=(),
-            new_count=0,
-            existing_count=0,
-            removed_count=0,
+        result = poll_loop.run_orchestration_cycle(
+            settings, store, now=datetime(2026, 7, 17, 8)
         )
 
-    monkeypatch.setattr(poll_loop, "calculate_delta", capture_delta)
+    assert [item.completed for item in result.trip_results] == [False, True]
+    assert "id=trip-1" in caplog.text
+    assert "name=Sommerfahrt" in caplog.text
+    assert "Synchronisierung" in caplog.text
 
-    poll_loop.run_polling_cycle(settings, store)  # type: ignore[arg-type]
+
+def test_smtp_failure_remains_retryable_and_summary_processing_continues(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: SimpleNamespace,
+    trips: list[Trip],
+    offer: Offer,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    events: list[object] = []
+    store = FakeStore(trips[:1])
+    _stub_successful_processing(monkeypatch, offer, events)
+
+    def fail_instant(
+        _store: object, _smtp: object, trip: Trip, **_kwargs: object
+    ) -> bool:
+        events.append(("instant", trip.trip_id))
+        raise SmtpTransportError("rejected")
+
+    monkeypatch.setattr(poll_loop, "send_instant_trip_notification", fail_instant)
+
+    with caplog.at_level("ERROR"):
+        result = poll_loop.run_orchestration_cycle(
+            settings, store, now=datetime(2026, 7, 17, 9)
+        )
+
+    assert result.trip_results[0].completed
+    assert ("summary", "trip-1") in events
+    assert "id=trip-1" in caplog.text
+    assert "name=Sommerfahrt" in caplog.text
+    assert "Sofortbenachrichtigung" in caplog.text
+
+
+def test_cycle_converts_offer_dates_to_local_time_before_synchronization(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: SimpleNamespace,
+    trips: list[Trip],
+    offer: Offer,
+) -> None:
+    captured: list[Offer] = []
+    store = FakeStore(trips[:1])
+    _stub_successful_processing(monkeypatch, offer)
+
+    def capture(_store: object, _trip: Trip, offers: object) -> object:
+        captured.extend(offers)
+        return SimpleNamespace(offer_ids=frozenset({offer.id}))
+
+    monkeypatch.setattr(poll_loop, "synchronize_trip_offers", capture)
+
+    poll_loop.run_orchestration_cycle(
+        settings, store, now=datetime(2026, 7, 17, 8)
+    )
 
     assert captured[0].start_date == offer.start_date.astimezone(LOCAL_TIMEZONE)
     assert captured[0].end_date == offer.end_date.astimezone(LOCAL_TIMEZONE)
     assert captured[0].start_date.tzinfo == LOCAL_TIMEZONE
 
 
-def test_poll_forever_sleeps_for_configured_interval(
-    monkeypatch: pytest.MonkeyPatch, settings: SimpleNamespace
+def test_trip_listing_failure_is_reported_as_failed_non_idle_cycle(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: SimpleNamespace,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    store = FakeStore()
+    monkeypatch.setattr(
+        store,
+        "list_trips",
+        lambda: (_ for _ in ()).throw(SQLiteStoreError("unavailable")),
+    )
+
+    with caplog.at_level("ERROR"):
+        result = poll_loop.run_orchestration_cycle(
+            settings, store, now=datetime(2026, 7, 17, 8)
+        )
+
+    assert not result.completed
+    assert not result.idle
+    assert "Reisen konnten nicht geladen werden" in caplog.text
+
+
+def test_poll_forever_logs_idle_and_sleeps_for_configured_interval(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: SimpleNamespace,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     calls: list[object] = []
-
-    def run_cycle(settings: SimpleNamespace, store: object) -> poll_loop.PollCycleResult:
-        calls.append("cycle")
-        return poll_loop.PollCycleResult(completed=True, mail_sent=False)
-
-    monkeypatch.setattr(poll_loop, "run_polling_cycle", run_cycle)
+    monkeypatch.setattr(
+        poll_loop,
+        "run_orchestration_cycle",
+        lambda settings, store, *, now: (
+            calls.append(("cycle", now))
+            or poll_loop.OrchestrationCycleResult(())
+        ),
+    )
 
     def stop_after_first_sleep(seconds: float) -> None:
         calls.append(seconds)
         raise RuntimeError("stop test loop")
 
-    with pytest.raises(RuntimeError, match="stop test loop"):
+    current_time = datetime(2026, 7, 17, 8)
+    with caplog.at_level("INFO"), pytest.raises(RuntimeError, match="stop test loop"):
         poll_loop.poll_forever(
             settings,
             object(),
             sleep=stop_after_first_sleep,
-            now=lambda: datetime(2026, 7, 14, 8),
-        )  # type: ignore[arg-type]
-
-    assert calls == ["cycle", 900]
-
-
-@pytest.mark.parametrize(
-    "current_time",
-    (datetime(2026, 7, 14, 9, 5), datetime(2026, 7, 14, 21, 1)),
-)
-def test_poll_forever_does_not_send_summary_for_slot_reached_at_startup(
-    monkeypatch: pytest.MonkeyPatch,
-    settings: SimpleNamespace,
-    current_time: datetime,
-) -> None:
-    sent: list[object] = []
-    monkeypatch.setattr(
-        poll_loop,
-        "run_polling_cycle",
-        lambda settings, store: poll_loop.PollCycleResult(completed=True, mail_sent=False),
-    )
-    monkeypatch.setattr(
-        poll_loop,
-        "send_html_email",
-        lambda smtp, html, *, subject: sent.append(subject),
-    )
-
-    with pytest.raises(RuntimeError, match="stop test loop"):
-        poll_loop.poll_forever(
-            settings,
-            object(),
-            sleep=lambda seconds: (_ for _ in ()).throw(RuntimeError("stop test loop")),
             now=lambda: current_time,
         )
 
-    assert sent == []
-
-
-def test_poll_forever_sends_summary_after_crossing_scheduled_time(
-    monkeypatch: pytest.MonkeyPatch, settings: SimpleNamespace
-) -> None:
-    sent: list[object] = []
-    timestamps = iter(
-        (
-            datetime(2026, 7, 14, 8, 59),
-            datetime(2026, 7, 14, 9, 1),
-            datetime(2026, 7, 14, 9, 1),
-        )
-    )
-    monkeypatch.setattr(
-        poll_loop,
-        "run_polling_cycle",
-        lambda settings, store: poll_loop.PollCycleResult(completed=True, mail_sent=False),
-    )
-    monkeypatch.setattr(
-        poll_loop,
-        "send_html_email",
-        lambda smtp, html, *, subject: sent.append(subject),
-    )
-
-    with pytest.raises(RuntimeError, match="stop test loop"):
-        poll_loop.poll_forever(
-            settings,
-            object(),
-            sleep=lambda seconds: (_ for _ in ()).throw(RuntimeError("stop test loop")),
-            now=lambda: next(timestamps),
-        )
-
-    assert sent == [poll_loop.SUMMARY_SUBJECT]
-
-
-def test_poll_forever_does_not_send_summary_before_nine(
-    monkeypatch: pytest.MonkeyPatch, settings: SimpleNamespace
-) -> None:
-    sent: list[object] = []
-    monkeypatch.setattr(
-        poll_loop,
-        "run_polling_cycle",
-        lambda settings, store: poll_loop.PollCycleResult(completed=True, mail_sent=False),
-    )
-    monkeypatch.setattr(
-        poll_loop,
-        "send_html_email",
-        lambda smtp, html, *, subject: sent.append(subject),
-    )
-
-    with pytest.raises(RuntimeError, match="stop test loop"):
-        poll_loop.poll_forever(
-            settings,
-            object(),
-            sleep=lambda seconds: (_ for _ in ()).throw(RuntimeError("stop test loop")),
-            now=lambda: datetime(2026, 7, 14, 8, 59),
-        )
-
-    assert sent == []
-
-
-def test_due_summary_slot_is_not_repeated_after_successful_send() -> None:
-    sent_slot = (datetime(2026, 7, 14).date(), 9)
-
-    due_slot = poll_loop._due_summary_slot(
-        datetime(2026, 7, 14, 9, 15),
-        sent_slot,
-    )
-
-    assert due_slot is None
+    assert calls == [
+        ("cycle", current_time.replace(tzinfo=LOCAL_TIMEZONE)),
+        900,
+    ]
+    assert "Keine Reisen konfiguriert" in caplog.text
+    assert "nächster Zyklus" in caplog.text

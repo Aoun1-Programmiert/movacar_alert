@@ -21,7 +21,6 @@ def smtp_settings() -> SmtpSettings:
         user="mailer",
         password="secret",
         sender="sender@example.test",
-        recipients=("first@example.test", "second@example.test"),
         use_tls=True,
     )
 
@@ -33,7 +32,12 @@ def test_send_html_email_uses_all_settings_and_reports_success(
     smtp = smtp_constructor.return_value.__enter__.return_value
     smtp.send_message.return_value = {}
 
-    send_html_email(smtp_settings, "<h1>Neue Angebote</h1>", subject="Testangebot")
+    send_html_email(
+        smtp_settings,
+        "<h1>Neue Angebote</h1>",
+        recipients=("first@example.test", "second@example.test"),
+        subject="Testangebot",
+    )
 
     smtp_constructor.assert_called_once_with("smtp.example.test", 587)
     smtp.starttls.assert_called_once()
@@ -68,7 +72,7 @@ def test_send_html_email_uses_explicit_trip_recipients(
 
 
 @patch("src.mailer.smtp_mailer.smtplib.SMTP")
-def test_send_html_email_rejects_explicit_empty_recipients(
+def test_send_html_email_requires_explicit_recipients(
     smtp_constructor: MagicMock, smtp_settings: SmtpSettings
 ) -> None:
     with pytest.raises(ValueError, match="recipient"):
@@ -85,7 +89,7 @@ def test_send_html_email_without_tls_skips_starttls(
     smtp.send_message.return_value = {}
     smtp_settings = SmtpSettings(**{**smtp_settings.__dict__, "use_tls": False})
 
-    send_html_email(smtp_settings, "<p>HTML</p>")
+    send_html_email(smtp_settings, "<p>HTML</p>", recipients=("recipient@example.test",))
 
     smtp.starttls.assert_not_called()
 
@@ -98,7 +102,7 @@ def test_send_html_email_signals_authentication_failure(
     smtp.login.side_effect = __import__("smtplib").SMTPAuthenticationError(535, b"denied")
 
     with pytest.raises(SmtpAuthenticationError, match="authentication"):
-        send_html_email(smtp_settings, "<p>HTML</p>")
+        send_html_email(smtp_settings, "<p>HTML</p>", recipients=("recipient@example.test",))
 
 
 @patch("src.mailer.smtp_mailer.smtplib.SMTP", side_effect=OSError("network unreachable"))
@@ -106,7 +110,7 @@ def test_send_html_email_signals_connection_failure(
     smtp_constructor: MagicMock, smtp_settings: SmtpSettings
 ) -> None:
     with pytest.raises(SmtpConnectionError, match="connection"):
-        send_html_email(smtp_settings, "<p>HTML</p>")
+        send_html_email(smtp_settings, "<p>HTML</p>", recipients=("recipient@example.test",))
 
 
 @patch("src.mailer.smtp_mailer.smtplib.SMTP")
@@ -117,4 +121,6 @@ def test_send_html_email_signals_transport_failure(
     smtp.send_message.return_value = {"second@example.test": (550, b"rejected")}
 
     with pytest.raises(SmtpTransportError, match="refused"):
-        send_html_email(smtp_settings, "<p>HTML</p>")
+        send_html_email(
+            smtp_settings, "<p>HTML</p>", recipients=("second@example.test",)
+        )

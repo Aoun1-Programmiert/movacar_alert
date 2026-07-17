@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+import logging
 import os
 from dataclasses import dataclass
 from math import isfinite
@@ -24,7 +24,7 @@ class SettingsValidationError(ValueError):
 
 @dataclass(frozen=True)
 class BoundingBox:
-    """Geographic bounds expressed as latitude and longitude limits."""
+    """Legacy geographic bounds kept for standalone matcher compatibility."""
 
     min_lat: float
     max_lat: float
@@ -34,14 +34,13 @@ class BoundingBox:
 
 @dataclass(frozen=True)
 class SmtpSettings:
-    """SMTP connection and message addressing configuration."""
+    """SMTP connection and sender configuration."""
 
     host: str
     port: int
     user: str
     password: str
     sender: str
-    recipients: tuple[str, ...]
     use_tls: bool
 
 
@@ -54,7 +53,6 @@ class Settings:
     sqlite_path: Path
     smtp: SmtpSettings
     http_timeout_seconds: float
-    de_bbox: BoundingBox
     log_file_path: Path | None
 
 
@@ -75,6 +73,7 @@ def load_settings(
         if environ is not None
         else {**_load_env_file(env_file), **os.environ}
     )
+    _warn_about_legacy_settings(values)
 
     api_url = _required(values, "API_URL")
     _validate_http_url(api_url, "API_URL")
@@ -92,13 +91,11 @@ def load_settings(
             user=_required(values, "SMTP_USER"),
             password=_required(values, "SMTP_PASSWORD"),
             sender=_required(values, "SMTP_FROM"),
-            recipients=_recipient_list(_required(values, "SMTP_TO")),
             use_tls=_boolean(_required(values, "SMTP_USE_TLS"), "SMTP_USE_TLS"),
         ),
         http_timeout_seconds=_positive_float(
             _required(values, "HTTP_TIMEOUT_SECONDS"), "HTTP_TIMEOUT_SECONDS"
         ),
-        de_bbox=_load_bbox(values),
         log_file_path=_optional_path(values.get("LOG_FILE_PATH")),
     )
 
@@ -125,7 +122,15 @@ def _load_env_file(env_file: Path | None) -> dict[str, str]:
     return values
 
 
+def _required(values: Mapping[str, str], name: str) -> str:
+    value = values.get(name, "").strip()
+    if not value:
+        raise SettingsValidationError(f"Missing required environment variable: {name}.")
+    return value
+
+
 def _load_bbox(values: Mapping[str, str]) -> BoundingBox:
+    """Load legacy matcher bounds; runtime Settings no longer uses them."""
     variable_names = (
         "DE_BBOX_MIN_LAT",
         "DE_BBOX_MAX_LAT",
@@ -138,31 +143,23 @@ def _load_bbox(values: Mapping[str, str]) -> BoundingBox:
         raise SettingsValidationError(
             f"DE bounding-box overrides must be specified together; missing: {missing_names}."
         )
-
     bbox = BoundingBox(
-        min_lat=_float_or_default(
+        min_lat=_legacy_float_or_default(
             values.get("DE_BBOX_MIN_LAT"), DEFAULT_DE_BBOX_MIN_LAT, "DE_BBOX_MIN_LAT"
         ),
-        max_lat=_float_or_default(
+        max_lat=_legacy_float_or_default(
             values.get("DE_BBOX_MAX_LAT"), DEFAULT_DE_BBOX_MAX_LAT, "DE_BBOX_MAX_LAT"
         ),
-        min_lon=_float_or_default(
+        min_lon=_legacy_float_or_default(
             values.get("DE_BBOX_MIN_LON"), DEFAULT_DE_BBOX_MIN_LON, "DE_BBOX_MIN_LON"
         ),
-        max_lon=_float_or_default(
+        max_lon=_legacy_float_or_default(
             values.get("DE_BBOX_MAX_LON"), DEFAULT_DE_BBOX_MAX_LON, "DE_BBOX_MAX_LON"
         ),
     )
     if bbox.min_lat >= bbox.max_lat or bbox.min_lon >= bbox.max_lon:
         raise SettingsValidationError("DE bounding-box minimum values must be lower than maximum values.")
     return bbox
-
-
-def _required(values: Mapping[str, str], name: str) -> str:
-    value = values.get(name, "").strip()
-    if not value:
-        raise SettingsValidationError(f"Missing required environment variable: {name}.")
-    return value
 
 
 def _validate_http_url(value: str, name: str) -> None:
@@ -198,7 +195,16 @@ def _positive_float(value: str, name: str) -> float:
     return parsed
 
 
-def _float_or_default(value: str | None, default: float, name: str) -> float:
+def _boolean(value: str, name: str) -> bool:
+    normalized_value = value.lower()
+    if normalized_value == "true":
+        return True
+    if normalized_value == "false":
+        return False
+    raise SettingsValidationError(f"{name} must be either true or false.")
+
+
+def _legacy_float_or_default(value: str | None, default: float, name: str) -> float:
     if value is None or not value.strip():
         return default
     try:
@@ -210,30 +216,26 @@ def _float_or_default(value: str | None, default: float, name: str) -> float:
     return parsed
 
 
-def _boolean(value: str, name: str) -> bool:
-    normalized_value = value.lower()
-    if normalized_value == "true":
-        return True
-    if normalized_value == "false":
-        return False
-    raise SettingsValidationError(f"{name} must be either true or false.")
-
-
-def _recipient_list(value: str) -> tuple[str, ...]:
-    try:
-        parsed = json.loads(value)
-    except json.JSONDecodeError as error:
-        raise SettingsValidationError("SMTP_TO must be a JSON array of email addresses.") from error
-    if not isinstance(parsed, list) or not parsed:
-        raise SettingsValidationError("SMTP_TO must be a non-empty JSON array of email addresses.")
-
-    recipients = tuple(item.strip() for item in parsed if isinstance(item, str))
-    if len(recipients) != len(parsed) or any(not recipient for recipient in recipients):
-        raise SettingsValidationError("SMTP_TO must contain only non-empty email address strings.")
-    return recipients
-
-
 def _optional_path(value: str | None) -> Path | None:
     if value is None or not value.strip():
         return None
     return Path(value.strip())
+
+
+def _warn_about_legacy_settings(values: Mapping[str, str]) -> None:
+    legacy_names = [
+        name
+        for name in (
+            "SMTP_TO",
+            "DE_BBOX_MIN_LAT",
+            "DE_BBOX_MAX_LAT",
+            "DE_BBOX_MIN_LON",
+            "DE_BBOX_MAX_LON",
+        )
+        if values.get(name, "").strip()
+    ]
+    if legacy_names:
+        logging.getLogger("movacar_alert.config.settings").warning(
+            "Ignoring legacy settings: %s. They no longer affect recipients or offer filtering.",
+            ", ".join(legacy_names),
+        )

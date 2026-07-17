@@ -1,106 +1,98 @@
-"""HTML templates for classified offer notification emails."""
+"""HTML templates for trip-scoped notification emails."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from html import escape
 
-from src.models.offer import ClassifiedOffer
+from src.models.offer import TripOfferView
+from src.notifications.trip_mail_view import TripMailView
 
 
-def render_offer_email(
-    new_offers: Iterable[ClassifiedOffer],
-    existing_offers: Iterable[ClassifiedOffer],
-) -> str:
-    """Render the new and existing offer sections in a stable HTML structure.
+def render_offer_email(view: TripMailView) -> str:
+    """Render an instant notification from a prepared trip mail view."""
 
-    Highlighting is deliberately read from ``ClassifiedOffer.is_highlighted``.
-    The renderer does not recalculate domain rules.
-    """
-
-    new = _validated_section(new_offers, expected_state="new", section_name="new")
-    existing = _validated_section(
-        existing_offers,
-        expected_state="existing",
-        section_name="existing",
-    )
-
+    _validate_view(view)
     return f"""<!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <title>Movacar-Angebote</title>
+  <title>Neue Angebote - {escape(view.trip.name)}</title>
   <style>
     body {{ font-family: Arial, sans-serif; color: #222; }}
+    .trip-details {{ background: #f5f5f5; padding: 12px; }}
     .offer-list {{ padding: 0; }}
     .offer {{ list-style: none; margin: 0 0 12px; padding: 12px; border: 1px solid #ddd; }}
-    .offer--highlight {{ background: #fff3cd; border: 3px solid #d39e00; }}
-    .highlight-label {{ color: #7a4f00; font-weight: bold; }}
+    .offer--green {{ background: #d9f7d9; border: 2px solid #198754; }}
+    .offer--yellow {{ background: #fff8d6; border: 1px solid #d39e00; }}
+    .offer--neutral {{ background: #fff; }}
+    .distance--green {{ color: #126b35; font-weight: bold; }}
+    .distance--yellow {{ color: #7a5a00; }}
+    .distance--neutral {{ color: #555; }}
     .empty-section {{ color: #666; font-style: italic; }}
-    .update-label {{ color: #555; font-weight: bold; }}
   </style>
 </head>
 <body>
-  <h1>Movacar-Angebote</h1>
-  {_render_section("new-offers", "Neue Angebote", new)}
-  {_render_section("existing-offers", "Bestehende Angebote", existing)}
+  <h1>Neue Movacar-Angebote</h1>
+  {_render_trip_details(view)}
+  {_render_section("new-offers", "Neue Angebote", view.new_offers)}
+  {_render_section("available-offers", "Alle verfügbaren Angebote", view.available_offers)}
 </body>
 </html>
 """
 
 
-def render_offer_summary_email(offers: Iterable[ClassifiedOffer]) -> str:
-    """Render a single overview of all currently available offers."""
+def render_offer_summary_email(view: TripMailView) -> str:
+    """Render a scheduled overview without delivery-state classifications."""
 
-    current = tuple(offers)
-    for offer in current:
-        if not isinstance(offer, ClassifiedOffer):
-            raise TypeError("current offers must be ClassifiedOffer instances.")
-
+    _validate_view(view)
     return f"""<!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <title>Aktuelle Movacar-Angebote</title>
+  <title>Aktuelle Angebote - {escape(view.trip.name)}</title>
   <style>
     body {{ font-family: Arial, sans-serif; color: #222; }}
+    .trip-details {{ background: #f5f5f5; padding: 12px; }}
     .offer-list {{ padding: 0; }}
     .offer {{ list-style: none; margin: 0 0 12px; padding: 12px; border: 1px solid #ddd; }}
-    .offer--highlight {{ background: #fff3cd; border: 3px solid #d39e00; }}
-    .highlight-label {{ color: #7a4f00; font-weight: bold; }}
+    .offer--green {{ background: #d9f7d9; border: 2px solid #198754; }}
+    .offer--yellow {{ background: #fff8d6; border: 1px solid #d39e00; }}
+    .offer--neutral {{ background: #fff; }}
+    .distance--green {{ color: #126b35; font-weight: bold; }}
+    .distance--yellow {{ color: #7a5a00; }}
+    .distance--neutral {{ color: #555; }}
     .empty-section {{ color: #666; font-style: italic; }}
   </style>
 </head>
 <body>
-  <h1>Aktuelles Update</h1>
-  <p class="update-label">Aktuelle Movacar-Angebote</p>
-  {_render_section("current-offers", "Aktuelle Angebote", current)}
+  <h1>Aktuelle Movacar-Angebote</h1>
+  {_render_trip_details(view)}
+  {_render_section("available-offers", "Alle verfügbaren Angebote", view.available_offers)}
 </body>
 </html>
 """
 
 
-def _validated_section(
-    offers: Iterable[ClassifiedOffer],
-    *,
-    expected_state: str,
-    section_name: str,
-) -> tuple[ClassifiedOffer, ...]:
-    validated = tuple(offers)
-    for offer in validated:
-        if not isinstance(offer, ClassifiedOffer):
-            raise TypeError(f"{section_name} offers must be ClassifiedOffer instances.")
-        if offer.state != expected_state:
-            raise ValueError(
-                f"{section_name} offers must have state '{expected_state}'."
-            )
-    return validated
+def _validate_view(view: TripMailView) -> None:
+    if not isinstance(view, TripMailView):
+        raise TypeError("mail view must be a TripMailView.")
+
+
+def _render_trip_details(view: TripMailView) -> str:
+    trip = view.trip
+    return f"""  <section class="trip-details" aria-label="Reiseinformationen">
+    <h2>Reiseinformationen</h2>
+    <div><strong>Reise:</strong> {escape(trip.name)}</div>
+    <div><strong>Pick-up-Zeitraum:</strong> {trip.pickup_start.strftime("%d.%m.%Y")} bis {trip.pickup_end.strftime("%d.%m.%Y")}</div>
+    <div><strong>Startstadt:</strong> {escape(trip.start_city)}</div>
+    <div><strong>Koordinaten:</strong> {trip.latitude:.5f}, {trip.longitude:.5f}</div>
+  </section>"""
 
 
 def _render_section(
     section_id: str,
     heading: str,
-    offers: tuple[ClassifiedOffer, ...],
+    offers: tuple[TripOfferView, ...],
 ) -> str:
     if not offers:
         content = '<p class="empty-section">Keine Angebote.</p>'
@@ -111,18 +103,13 @@ def _render_section(
     return f'  <section id="{section_id}">\n    <h2>{heading}</h2>\n    {content}\n  </section>'
 
 
-def _render_offer(offer: ClassifiedOffer) -> str:
-    highlight_class = " offer--highlight" if offer.is_highlighted else ""
-    highlight_label = (
-        '<div class="highlight-label" data-highlight="true">'
-        "&Auml;u&szlig;erst interessant"
-        "</div>"
-        if offer.is_highlighted
-        else ""
-    )
-    return f"""    <li class="offer{highlight_class}" data-offer-id="{escape(offer.id, quote=True)}">
-      {highlight_label}
+def _render_offer(offer_view: TripOfferView) -> str:
+    offer = offer_view.offer
+    tier_class = f"offer--{offer_view.distance_tier.value}"
+    distance_class = f"distance--{offer_view.distance_tier.value}"
+    return f"""    <li class="offer {tier_class}" data-offer-id="{escape(offer.id, quote=True)}">
       <strong>{escape(offer.origin.city)} &rarr; {escape(offer.destination.city)}</strong>
-      <div>Zeitraum: {offer.start_date.strftime("%d-%m-%Y")} bis {offer.end_date.strftime("%d-%m-%Y")}</div>
+      <div>Zeitraum: {offer.start_date.strftime("%d.%m.%Y")} bis {offer.end_date.strftime("%d.%m.%Y")}</div>
       <div>Freikilometer: {offer.free_km}</div>
+      <div class="{distance_class}">Entfernung zur Startstadt: {offer_view.distance_km_rounded:.1f} km</div>
     </li>"""

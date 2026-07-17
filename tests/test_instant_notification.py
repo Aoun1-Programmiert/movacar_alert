@@ -45,7 +45,6 @@ def smtp_settings() -> SmtpSettings:
         user="mailer",
         password="secret",
         sender="sender@example.test",
-        recipients=("global@example.test",),
         use_tls=True,
     )
 

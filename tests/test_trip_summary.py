@@ -43,7 +43,6 @@ def smtp_settings() -> SmtpSettings:
         user="mailer",
         password="secret",
         sender="sender@example.test",
-        recipients=("legacy@example.test",),
         use_tls=True,
     )
 

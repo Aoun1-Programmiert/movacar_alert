@@ -1,10 +1,10 @@
-"""Polling-cycle orchestration for offer monitoring."""
+"""Sequential, fault-isolated orchestration for trip offer monitoring."""
 
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field
-from datetime import date, datetime, time as datetime_time, timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 import logging
 import time
 
@@ -13,100 +13,133 @@ from src.config.settings import Settings
 from src.config.timezone import LOCAL_TIMEZONE
 from src.mailer.smtp_mailer import SmtpSendError, send_html_email
 from src.mailer.templates import render_offer_email, render_offer_summary_email
-from src.matcher.offer_matcher import calculate_delta
-from src.models.offer import ClassifiedOffer, Offer
+from src.models.offer import Offer, Trip
+from src.notifications.instant_notification import (
+    MissingTripRecipientsError,
+    send_instant_trip_notification,
+)
+from src.notifications.trip_summary import send_due_trip_summary
 from src.parser.offer_parser import OfferParsingError, parse_offers
 from src.storage.sqlite_store import SQLiteStore, SQLiteStoreError
+from src.synchronization.trip_offer_synchronizer import synchronize_trip_offers
 
 
 LOGGER = logging.getLogger("movacar_alert.loop.poll_loop")
-SUMMARY_HOURS = (9, 21)
-SUMMARY_SUBJECT = "Regelmäßiges Update - Aktuelle Angebote"
 
 
 @dataclass(frozen=True)
-class PollCycleResult:
-    """Outcome counts and completion state of one polling cycle."""
+class TripProcessingResult:
+    """Result of processing one persisted trip."""
 
+    trip_id: str
+    trip_name: str
     completed: bool
-    mail_sent: bool
-    new_count: int = 0
-    existing_count: int = 0
-    removed_count: int = 0
-    current_offers: tuple[ClassifiedOffer, ...] = field(default=(), compare=False)
 
 
-def run_polling_cycle(settings: Settings, store: SQLiteStore) -> PollCycleResult:
-    """Execute one complete polling cycle while handling expected operational errors.
+@dataclass(frozen=True)
+class OrchestrationCycleResult:
+    """Result of one orchestration cycle across all persisted trips."""
 
-    API and parsing failures leave persisted state untouched. SMTP failures do not
-    persist newly discovered offers, so they are retried during the next cycle.
-    """
+    trip_results: tuple[TripProcessingResult, ...]
+    completed: bool = True
+
+    @property
+    def idle(self) -> bool:
+        """Return whether a successful trip lookup found no work."""
+
+        return self.completed and not self.trip_results
+
+    @property
+    def completed_trip_count(self) -> int:
+        """Return the number of trips whose fetch and synchronization completed."""
+
+        return sum(result.completed for result in self.trip_results)
+
+
+def run_orchestration_cycle(
+    settings: Settings,
+    store: SQLiteStore,
+    *,
+    now: datetime,
+) -> OrchestrationCycleResult:
+    """Load and sequentially process every trip while isolating trip failures."""
+
     try:
-        response = fetch_offers(settings)
+        trips = store.list_trips()
+    except SQLiteStoreError as error:
+        LOGGER.error("Reisen konnten nicht geladen werden: %s", error)
+        return OrchestrationCycleResult((), completed=False)
+
+    trip_results = tuple(
+        _process_one_trip(settings, store, trip, now=now) for trip in trips
+    )
+
+    try:
+        store.purge_unavailable_trip_offers(now=now)
+    except SQLiteStoreError as error:
+        LOGGER.error("Bereinigung nicht verfügbarer Reiseangebote fehlgeschlagen: %s", error)
+        return OrchestrationCycleResult(trip_results, completed=False)
+
+    return OrchestrationCycleResult(trip_results)
+
+
+def _process_one_trip(
+    settings: Settings,
+    store: SQLiteStore,
+    trip: Trip,
+    *,
+    now: datetime,
+) -> TripProcessingResult:
+    """Fetch, synchronize, and notify for one trip."""
+
+    try:
+        response = fetch_offers(settings, trip)
         offers = _with_local_dates(parse_offers(response))
     except (ApiClientError, OfferParsingError) as error:
-        LOGGER.error("Polling cycle aborted while fetching or parsing offers: %s", error)
-        return PollCycleResult(completed=False, mail_sent=False)
+        _log_trip_error(trip, "Abruf/Parsing", error)
+        return TripProcessingResult(trip.trip_id, trip.name, completed=False)
 
     try:
-        known_offers = store.read_offers()
-        delta = calculate_delta(offers, known_offers, settings.de_bbox)
+        synchronization = synchronize_trip_offers(store, trip, offers)
     except SQLiteStoreError as error:
-        LOGGER.error("Polling cycle aborted while reading persisted offers: %s", error)
-        return PollCycleResult(completed=False, mail_sent=False)
+        _log_trip_error(trip, "Synchronisierung", error)
+        return TripProcessingResult(trip.trip_id, trip.name, completed=False)
 
-    result = PollCycleResult(
-        completed=True,
-        mail_sent=False,
-        new_count=delta.new_count,
-        existing_count=delta.existing_count,
-        removed_count=delta.removed_count,
-        current_offers=delta.new + delta.existing,
+    try:
+        instant_sent = send_instant_trip_notification(
+            store,
+            settings.smtp,
+            trip,
+            composer=render_offer_email,
+            mailer=send_html_email,
+        )
+    except (SmtpSendError, MissingTripRecipientsError, SQLiteStoreError) as error:
+        _log_trip_error(trip, "Sofortbenachrichtigung", error)
+        instant_sent = False
+
+    try:
+        summary_sent = send_due_trip_summary(
+            store,
+            settings.smtp,
+            trip,
+            now,
+            composer=render_offer_summary_email,
+            mailer=send_html_email,
+        )
+    except (SmtpSendError, MissingTripRecipientsError, SQLiteStoreError) as error:
+        _log_trip_error(trip, "Übersicht", error)
+        summary_sent = False
+
+    LOGGER.info(
+        "Reise verarbeitet [id=%s, name=%s]: %d Angebote synchronisiert, "
+        "Sofortmail=%s, Übersicht=%s.",
+        trip.trip_id,
+        trip.name,
+        len(synchronization.offer_ids),
+        "versendet" if instant_sent else "nicht versendet",
+        "versendet" if summary_sent else "nicht versendet",
     )
-    if delta.new:
-        try:
-            html_body = render_offer_email(delta.new, delta.existing)
-            send_html_email(settings.smtp, html_body)
-        except SmtpSendError as error:
-            LOGGER.error("Polling cycle mail delivery failed: %s", error)
-            return result
-
-        result = PollCycleResult(
-            completed=True,
-            mail_sent=True,
-            new_count=result.new_count,
-            existing_count=result.existing_count,
-            removed_count=result.removed_count,
-            current_offers=result.current_offers,
-        )
-        try:
-            store.insert_offers(delta.new)
-        except SQLiteStoreError as error:
-            LOGGER.error("Polling cycle aborted while persisting new offers: %s", error)
-            return PollCycleResult(
-                completed=False,
-                mail_sent=True,
-                new_count=result.new_count,
-                existing_count=result.existing_count,
-                removed_count=result.removed_count,
-                current_offers=result.current_offers,
-            )
-    try:
-        soft_deleted = store.soft_delete_removed_offers(offer.id for offer in offers)
-        purged = store.purge_soft_deleted_offers()
-    except SQLiteStoreError as error:
-        LOGGER.error("Polling cycle aborted during persisted-offer cleanup: %s", error)
-        return PollCycleResult(
-            completed=False,
-            mail_sent=result.mail_sent,
-            new_count=result.new_count,
-            existing_count=result.existing_count,
-            removed_count=result.removed_count,
-            current_offers=result.current_offers,
-        )
-
-    return result
+    return TripProcessingResult(trip.trip_id, trip.name, completed=True)
 
 
 def poll_forever(
@@ -116,83 +149,38 @@ def poll_forever(
     sleep: Callable[[float], None] = time.sleep,
     now: Callable[[], datetime] | None = None,
 ) -> None:
-    """Run polling cycles indefinitely at the configured interval."""
+    """Run trip orchestration cycles indefinitely at the configured interval."""
+
     interval_seconds = settings.poll_interval_minutes * 60
     clock = (lambda: datetime.now(LOCAL_TIMEZONE)) if now is None else now
-    last_summary_slot = _latest_summary_slot(_local_now(clock()))
     while True:
-        result = run_polling_cycle(settings, store)
-        if result.completed:
-            last_summary_slot = _send_due_summary(
-                settings,
-                result,
-                _local_now(clock()),
-                last_summary_slot,
-            )
-        if result.completed and (result.new_count == 0 or result.mail_sent):
-            next_cycle_at = _local_now(clock()) + timedelta(seconds=interval_seconds)
-            email_status = "eine" if result.mail_sent else "keine"
+        cycle_now = _local_now(clock())
+        result = run_orchestration_cycle(settings, store, now=cycle_now)
+        next_cycle_at = _local_now(clock()) + timedelta(seconds=interval_seconds)
+        if result.idle:
             LOGGER.info(
-                "Erfolgreicher Polling-Durchlauf: %s neue Angebote gesichtet; "
-                "%s E-Mail versendet. Nächster Durchlauf um %s.",
-                result.new_count,
-                email_status,
+                "Keine Reisen konfiguriert; nächster Zyklus um %s.",
+                next_cycle_at.strftime("%Y-%m-%d %H:%M:%S"),
+            )
+        elif result.completed:
+            LOGGER.info(
+                "Zyklus abgeschlossen: %d/%d Reisen erfolgreich verarbeitet. "
+                "Nächster Zyklus um %s.",
+                result.completed_trip_count,
+                len(result.trip_results),
                 next_cycle_at.strftime("%Y-%m-%d %H:%M:%S"),
             )
         sleep(interval_seconds)
 
 
-def _send_due_summary(
-    settings: Settings,
-    result: PollCycleResult,
-    now: datetime,
-    last_summary_slot: tuple[date, int] | None,
-) -> tuple[date, int] | None:
-    """Send at most one due summary slot and retain failed slots for retry."""
-
-    due_slot = _due_summary_slot(now, last_summary_slot)
-    if due_slot is None:
-        return last_summary_slot
-
-    try:
-        send_html_email(
-            settings.smtp,
-            render_offer_summary_email(result.current_offers),
-            subject=SUMMARY_SUBJECT,
-        )
-    except SmtpSendError as error:
-        LOGGER.error("Scheduled summary mail delivery failed: %s", error)
-        return last_summary_slot
-
-    LOGGER.info(
-        "Geplante Angebotsübersicht versendet für %s Uhr.",
-        f"{due_slot[1]:02d}:00",
+def _log_trip_error(trip: Trip, phase: str, error: Exception) -> None:
+    LOGGER.error(
+        "Reise fehlgeschlagen [id=%s, name=%s, phase=%s]: %s",
+        trip.trip_id,
+        trip.name,
+        phase,
+        error,
     )
-    return due_slot
-
-
-def _due_summary_slot(
-    now: datetime,
-    last_summary_slot: tuple[date, int] | None,
-) -> tuple[date, int] | None:
-    """Return the latest local summary slot that is due and not yet sent."""
-
-    local_now = _local_now(now)
-    latest_slot = _latest_summary_slot(local_now)
-    if latest_slot is not None and latest_slot != last_summary_slot:
-        return latest_slot
-    return None
-
-
-def _latest_summary_slot(now: datetime) -> tuple[date, int] | None:
-    """Return the most recent summary slot reached at the given local time."""
-
-    local_now = _local_now(now)
-    reached_hours = (hour for hour in SUMMARY_HOURS if local_now.time() >= datetime_time(hour))
-    latest_hour = next(reversed(tuple(reached_hours)), None)
-    if latest_hour is None:
-        return None
-    return local_now.date(), latest_hour
 
 
 def _local_now(value: datetime) -> datetime:
@@ -203,12 +191,13 @@ def _local_now(value: datetime) -> datetime:
 
 def _with_local_dates(offers: Iterable[Offer]) -> tuple[Offer, ...]:
     """Convert parser-normalized timestamps to the configured local-time policy."""
+
     converted: list[Offer] = []
     for offer in offers:
         if offer.start_date.tzinfo is None or offer.start_date.utcoffset() is None:
-            raise ValueError("Offer start_date must include a timezone.")
+            raise OfferParsingError("Offer start_date must include a timezone.")
         if offer.end_date.tzinfo is None or offer.end_date.utcoffset() is None:
-            raise ValueError("Offer end_date must include a timezone.")
+            raise OfferParsingError("Offer end_date must include a timezone.")
         converted.append(
             Offer(
                 id=offer.id,

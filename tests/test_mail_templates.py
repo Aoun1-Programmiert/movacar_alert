@@ -1,125 +1,154 @@
-"""Unit tests for the classified offer HTML mail template."""
+"""Unit tests for the trip-scoped HTML mail templates."""
 
-from datetime import datetime
+from datetime import date, datetime
 
 import pytest
 
 from src.mailer.templates import render_offer_email, render_offer_summary_email
-from src.models.offer import ClassifiedOffer, GeoLocation
+from src.models.offer import DistanceTier, GeoLocation, Offer, Trip, TripOfferView
+from src.notifications.trip_mail_view import TripMailView
 
 
-def make_classified(
+def make_trip() -> Trip:
+    return Trip(
+        trip_id="trip-1",
+        name="Sommerfahrt",
+        pickup_start=date(2026, 7, 20),
+        pickup_end=date(2026, 7, 25),
+        start_city="Berlin",
+        latitude=52.52,
+        longitude=13.405,
+    )
+
+
+def make_view(
     offer_id: str,
+    distance_km: float,
     *,
-    state: str,
-    is_highlighted: bool,
-    origin_city: str = "Berlin",
-) -> ClassifiedOffer:
-    return ClassifiedOffer(
-        id=offer_id,
-        start_date=datetime(2026, 7, 14, 8, 0),
-        end_date=datetime(2026, 7, 16, 8, 0),
-        free_km=500,
-        origin=GeoLocation(origin_city, 52.52, 13.405),
-        destination=GeoLocation("Paris", 48.8566, 2.3522),
-        is_highlighted=is_highlighted,
+    state: str = "new",
+    is_sent: bool = False,
+    trip: Trip | None = None,
+) -> TripOfferView:
+    return TripOfferView(
+        trip=trip or make_trip(),
+        offer=Offer(
+            id=offer_id,
+            start_date=datetime(2026, 7, 20, 8),
+            end_date=datetime(2026, 7, 22, 8),
+            free_km=500,
+            origin=GeoLocation("Potsdam", 52.4, 13.1),
+            destination=GeoLocation("Paris", 48.8566, 2.3522),
+        ),
+        distance_km=distance_km,
+        is_available=True,
         state=state,  # type: ignore[arg-type]
+        is_sent=is_sent,
+        distance_tier=DistanceTier.for_distance(distance_km),
     )
 
 
-def test_render_contains_stable_new_and_existing_sections() -> None:
-    html = render_offer_email(
-        [make_classified("new-1", state="new", is_highlighted=False)],
-        [make_classified("old-1", state="existing", is_highlighted=False)],
+def test_instant_template_renders_trip_details_and_new_offers_first() -> None:
+    trip = make_trip()
+    new_offer = make_view("new-1", 99.95, trip=trip)
+    available_offer = make_view("old-1", 250, state="existing", is_sent=True, trip=trip)
+    view = TripMailView(
+        trip,
+        ("recipient@example.test",),
+        (new_offer,),
+        (new_offer, available_offer),
     )
 
-    assert html.index('id="new-offers"') < html.index('id="existing-offers"')
-    assert html.count("<section ") == 2
-    assert 'data-offer-id="new-1"' in html
-    assert 'data-offer-id="old-1"' in html
-    assert "Neue Angebote" in html
-    assert "Bestehende Angebote" in html
+    html = render_offer_email(view)
 
-
-def test_highlighted_offer_has_visual_class_and_label() -> None:
-    html = render_offer_email(
-        [make_classified("highlighted", state="new", is_highlighted=True)],
-        [],
+    assert html.index('id="new-offers"') < html.index('id="available-offers"')
+    assert html.index('data-offer-id="new-1"') < html.index(
+        'id="available-offers"'
     )
-
-    assert 'class="offer offer--highlight"' in html
-    assert 'data-highlight="true"' in html
-    assert "&Auml;u&szlig;erst interessant" in html
-    assert "background: #fff3cd" in html
-
-
-def test_non_highlighted_offer_has_no_highlight_output() -> None:
-    html = render_offer_email(
-        [make_classified("regular", state="new", is_highlighted=False)],
-        [],
-    )
-
-    assert 'class="offer offer--highlight"' not in html
-    assert "data-highlight" not in html
-    assert '<div class="highlight-label"' not in html
-
-
-def test_renderer_formats_offer_dates_without_times() -> None:
-    html = render_offer_email(
-        [make_classified("dated", state="new", is_highlighted=False)],
-        [],
-    )
-
-    assert "Zeitraum: 14-07-2026 bis 16-07-2026" in html
-    assert "2026-07-14T08:00:00" not in html
-    assert "2026-07-16T08:00:00" not in html
-
-
-def test_renderer_escapes_offer_content_and_renders_empty_sections() -> None:
-    html = render_offer_email(
-        [make_classified('<new&1>', state="new", is_highlighted=False, origin_city="<Berlin>")],
-        [],
-    )
-
-    assert 'data-offer-id="&lt;new&amp;1&gt;"' in html
-    assert "&lt;Berlin&gt;" in html
-    assert '<p class="empty-section">Keine Angebote.</p>' in html
+    assert "Sommerfahrt" in html
+    assert "20.07.2026 bis 25.07.2026" in html
+    assert "Startstadt:</strong> Berlin" in html
+    assert "Entfernung zur Startstadt: 100.0 km" in html
+    assert html.count('data-offer-id="new-1"') == 2
 
 
 @pytest.mark.parametrize(
-    ("new_offers", "existing_offers", "error", "message"),
+    ("distance", "offer_class", "distance_class"),
     (
-        ([object()], [], TypeError, "ClassifiedOffer"),
-        ([], [make_classified("wrong", state="new", is_highlighted=False)], ValueError, "existing"),
+        (99.999, "offer--green", "distance--green"),
+        (100, "offer--yellow", "distance--yellow"),
+        (249.999, "offer--yellow", "distance--yellow"),
+        (250, "offer--neutral", "distance--neutral"),
     ),
 )
-def test_renderer_requires_classified_offers_in_matching_sections(
-    new_offers: list[object],
-    existing_offers: list[object],
-    error: type[Exception],
-    message: str,
+def test_template_renders_all_distance_tiers(
+    distance: float, offer_class: str, distance_class: str
 ) -> None:
-    with pytest.raises(error, match=message):
-        render_offer_email(new_offers, existing_offers)  # type: ignore[arg-type]
+    view = make_view("distance", distance)
+
+    html = render_offer_email(TripMailView(make_trip(), ("a@example.test",), (view,), (view,)))
+
+    assert f'class="offer {offer_class}"' in html
+    assert f'class="{distance_class}"' in html
 
 
-def test_summary_renderer_contains_all_current_offers() -> None:
-    html = render_offer_summary_email(
-        [
-            make_classified("current-1", state="new", is_highlighted=True),
-            make_classified("current-2", state="existing", is_highlighted=False),
-        ]
+def test_summary_contains_trip_and_distance_without_new_offer_classification() -> None:
+    trip = make_trip()
+    offer = make_view("current", 12.3, trip=trip)
+    view = TripMailView(trip, ("recipient@example.test",), (), (offer,))
+
+    html = render_offer_summary_email(view)
+
+    assert "Reiseinformationen" in html
+    assert "Entfernung zur Startstadt: 12.3 km" in html
+    assert "Neue Angebote" not in html
+    assert "Versendet" not in html
+    assert "Neu" not in html
+    assert html.count('data-offer-id="current"') == 1
+
+
+def test_template_escapes_trip_and_offer_content_and_renders_empty_sections() -> None:
+    trip = Trip(
+        trip_id="trip-1",
+        name="<Sommerfahrt>",
+        pickup_start=date(2026, 7, 20),
+        pickup_end=date(2026, 7, 25),
+        start_city="<Berlin>",
+        latitude=52.52,
+        longitude=13.405,
     )
+    offer = make_view("<offer&1>", 20, trip=trip)
+    escaped_offer = Offer(
+        id=offer.offer.id,
+        start_date=offer.offer.start_date,
+        end_date=offer.offer.end_date,
+        free_km=offer.offer.free_km,
+        origin=GeoLocation("<Potsdam>", 52.4, 13.1),
+        destination=offer.offer.destination,
+    )
+    offer = TripOfferView(
+        trip=trip,
+        offer=escaped_offer,
+        distance_km=20,
+        is_available=True,
+        state="new",
+        is_sent=False,
+        distance_tier=DistanceTier.GREEN,
+    )
+    view = TripMailView(trip, ("a@example.test",), (offer,), (offer,))
 
-    assert "<h1>Aktuelles Update</h1>" in html
-    assert "Aktuelle Movacar-Angebote" in html
-    assert html.count('data-offer-id="current-') == 2
-    assert 'data-offer-id="current-1"' in html
-    assert 'data-offer-id="current-2"' in html
+    html = render_offer_email(view)
+
+    assert "&lt;Sommerfahrt&gt;" in html
+    assert "&lt;Berlin&gt;" in html
+    assert 'data-offer-id="&lt;offer&amp;1&gt;"' in html
+    assert "&lt;Potsdam&gt;" in html
+    assert '<p class="empty-section">Keine Angebote.</p>' not in html
+
+    empty_view = TripMailView(trip, ("a@example.test",), (), ())
+    assert '<p class="empty-section">Keine Angebote.</p>' in render_offer_email(empty_view)
 
 
-def test_summary_renderer_renders_empty_overview() -> None:
-    html = render_offer_summary_email([])
-
-    assert '<section id="current-offers">' in html
-    assert '<p class="empty-section">Keine Angebote.</p>' in html
+@pytest.mark.parametrize("renderer", (render_offer_email, render_offer_summary_email))
+def test_templates_require_prepared_trip_mail_view(renderer: object) -> None:
+    with pytest.raises(TypeError, match="TripMailView"):
+        renderer(object())  # type: ignore[operator]
