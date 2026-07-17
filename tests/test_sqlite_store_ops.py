@@ -88,6 +88,75 @@ def test_insert_reactivates_soft_deleted_offer(store: SQLiteStore, offer: Offer)
         assert connection.execute("SELECT COUNT(*) FROM offers").fetchone() == (1,)
 
 
+def test_existing_global_offer_creates_new_unsent_relation_when_seen_by_trip(
+    store: SQLiteStore, offer: Offer
+) -> None:
+    store.insert_offers([offer])
+    with sqlite3.connect(store.database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO trips (
+                trip_id, name, pickup_start, pickup_end, start_city, latitude, longitude
+            ) VALUES ('trip-1', 'Sommerfahrt', '2026-07-14', '2026-07-20', 'Berlin', 52.52, 13.405)
+            """
+        )
+
+    assert store.create_trip_offer("trip-1", offer.id, distance_km=12.5) is True
+
+    with sqlite3.connect(store.database_path) as connection:
+        assert connection.execute(
+            """
+            SELECT trip_id, offer_id, distance_km, is_available, is_sent, sent_at
+            FROM trip_offers
+            """
+        ).fetchall() == [("trip-1", offer.id, 12.5, 1, 0, None)]
+        assert connection.execute("SELECT id FROM offers").fetchall() == [(offer.id,)]
+
+
+def test_creating_existing_trip_offer_preserves_its_notification_state(
+    store: SQLiteStore, offer: Offer
+) -> None:
+    store.insert_offers([offer])
+    with sqlite3.connect(store.database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO trips (
+                trip_id, name, pickup_start, pickup_end, start_city, latitude, longitude
+            ) VALUES ('trip-1', 'Sommerfahrt', '2026-07-14', '2026-07-20', 'Berlin', 52.52, 13.405)
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO trip_offers (trip_id, offer_id, distance_km, is_sent, sent_at)
+            VALUES ('trip-1', ?, 25, 1, '2026-07-14T12:00:00+02:00')
+            """,
+            (offer.id,),
+        )
+
+    assert store.create_trip_offer("trip-1", offer.id, distance_km=12.5) is False
+
+    with sqlite3.connect(store.database_path) as connection:
+        assert connection.execute(
+            "SELECT distance_km, is_sent, sent_at FROM trip_offers"
+        ).fetchone() == (25.0, 1, "2026-07-14T12:00:00+02:00")
+
+
+@pytest.mark.parametrize(
+    ("trip_id", "offer_id", "distance_km"),
+    [
+        ("", "offer-1", 1),
+        ("trip-1", "", 1),
+        ("trip-1", "offer-1", -1),
+        ("trip-1", "offer-1", True),
+    ],
+)
+def test_create_trip_offer_rejects_invalid_values(
+    store: SQLiteStore, trip_id: str, offer_id: str, distance_km: float
+) -> None:
+    with pytest.raises(ValueError):
+        store.create_trip_offer(trip_id, offer_id, distance_km=distance_km)
+
+
 def test_database_failures_are_logged_explicit_and_recoverable(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:

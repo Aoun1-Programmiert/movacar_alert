@@ -154,6 +154,7 @@ def test_initialize_schema_adds_trip_schema_to_version_one_database(
                 """
             )
         } == {"trips", "trip_recipients", "trip_offers", "trip_overview_slots"}
+        assert connection.execute("SELECT * FROM trip_offers").fetchall() == []
 
 
 def test_failed_baseline_does_not_activate_migration(tmp_path: Path) -> None:

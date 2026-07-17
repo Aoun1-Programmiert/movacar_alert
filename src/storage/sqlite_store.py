@@ -274,6 +274,44 @@ class SQLiteStore:
             LOGGER.error("SQLite offer insert failed: %s", exc)
             raise SQLiteStoreError("Could not insert offers into SQLite.") from exc
 
+    def create_trip_offer(
+        self, trip_id: str, offer_id: str, *, distance_km: float
+    ) -> bool:
+        """Create an unsent trip relation for a globally persisted offer.
+
+        Returns whether this call created the relation. Existing relations are
+        deliberately left untouched so their per-trip notification state is
+        preserved.
+        """
+
+        if not isinstance(trip_id, str) or not trip_id.strip():
+            raise ValueError("trip_id must be a non-empty string.")
+        if not isinstance(offer_id, str) or not offer_id.strip():
+            raise ValueError("offer_id must be a non-empty string.")
+        if (
+            isinstance(distance_km, bool)
+            or not isinstance(distance_km, (int, float))
+            or distance_km < 0
+        ):
+            raise ValueError("distance_km must be a non-negative number.")
+
+        try:
+            with sqlite3.connect(self.database_path) as connection:
+                connection.execute("PRAGMA foreign_keys = ON")
+                cursor = connection.execute(
+                    """
+                    INSERT INTO trip_offers (trip_id, offer_id, distance_km)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(trip_id, offer_id) DO NOTHING
+                    """,
+                    (trip_id, offer_id, distance_km),
+                )
+        except sqlite3.Error as exc:
+            LOGGER.error("SQLite trip-offer creation failed: %s", exc)
+            raise SQLiteStoreError("Could not create the trip-offer relation.") from exc
+
+        return cursor.rowcount == 1
+
     def soft_delete_removed_offers(self, active_offer_ids: Iterable[str]) -> int:
         """Mark persisted offers absent from the API response as deleted."""
 
