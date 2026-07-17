@@ -8,9 +8,11 @@ import socket
 import time
 from typing import Any
 from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 from src.config.settings import Settings
+from src.models.trip import Trip
 
 
 HTTP_RETRY_DELAYS_SECONDS = (1, 2, 4)
@@ -31,10 +33,10 @@ class ApiResponseError(ApiClientError):
     """Raised when the API response is not valid offers JSON."""
 
 
-def fetch_offers(settings: Settings) -> dict[str, Any]:
-    """Fetch and validate the raw offers response using configured HTTP settings."""
+def fetch_offers(settings: Settings, trip: Trip) -> dict[str, Any]:
+    """Fetch and validate offers for one trip's pickup window."""
 
-    request = Request(settings.api_url, method="GET")
+    request = Request(_build_trip_url(settings.api_url, trip), method="GET")
 
     for attempt in range(MAX_RETRIES + 1):
         try:
@@ -62,6 +64,21 @@ def fetch_offers(settings: Settings) -> dict[str, Any]:
             time.sleep(delay)
 
     raise AssertionError("The retry loop must return or raise.")
+
+
+def _build_trip_url(api_url: str, trip: Trip) -> str:
+    """Add the confirmed Movacar query parameters to the configured API URL."""
+
+    parsed = urlsplit(api_url)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query.update(
+        {
+            "locale": "en",
+            "pickupDateFrom": trip.pickup_start.isoformat(),
+            "pickupDateTo": trip.pickup_end.isoformat(),
+        }
+    )
+    return urlunsplit(parsed._replace(query=urlencode(query)))
 
 
 def _parse_response(payload: bytes) -> dict[str, Any]:
