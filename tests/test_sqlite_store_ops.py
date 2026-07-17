@@ -148,6 +148,8 @@ def test_creating_existing_trip_offer_preserves_its_notification_state(
         ("trip-1", "", 1),
         ("trip-1", "offer-1", -1),
         ("trip-1", "offer-1", True),
+        ("trip-1", "offer-1", float("nan")),
+        ("trip-1", "offer-1", float("inf")),
     ],
 )
 def test_create_trip_offer_rejects_invalid_values(

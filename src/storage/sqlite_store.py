@@ -7,6 +7,7 @@ import logging
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from math import isfinite
 from pathlib import Path
 
 from src.config.timezone import LOCAL_TIMEZONE
@@ -451,9 +452,10 @@ class SQLiteStore:
         if (
             isinstance(distance_km, bool)
             or not isinstance(distance_km, (int, float))
+            or not isfinite(distance_km)
             or distance_km < 0
         ):
-            raise ValueError("distance_km must be a non-negative number.")
+            raise ValueError("distance_km must be a finite, non-negative number.")
 
         try:
             with sqlite3.connect(self.database_path) as connection:
