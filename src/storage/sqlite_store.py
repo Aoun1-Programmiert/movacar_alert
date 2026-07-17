@@ -14,7 +14,7 @@ from src.models.offer import Offer
 
 LOGGER = logging.getLogger("movacar_alert.storage.sqlite_store")
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 _MIGRATIONS_TABLE = "schema_migrations"
 _OFFERS_COLUMNS = {
     "id",
@@ -59,6 +59,7 @@ class SQLiteStore:
 
         try:
             with sqlite3.connect(self.database_path) as connection:
+                connection.execute("PRAGMA foreign_keys = ON")
                 connection.execute("BEGIN")
                 connection.execute(
                     f"""
@@ -74,18 +75,12 @@ class SQLiteStore:
                         f"SELECT version FROM {_MIGRATIONS_TABLE}"
                     )
                 }
-                if SCHEMA_VERSION not in applied_versions:
+                if 1 not in applied_versions:
                     self._apply_offers_baseline(connection)
-                    connection.execute(
-                        f"""
-                        INSERT INTO {_MIGRATIONS_TABLE} (version, applied_at)
-                        VALUES (?, ?)
-                        """,
-                        (
-                            SCHEMA_VERSION,
-                            datetime.now(LOCAL_TIMEZONE).isoformat(),
-                        ),
-                    )
+                    self._record_migration(connection, 1)
+                if 2 not in applied_versions:
+                    self._apply_trip_schema(connection)
+                    self._record_migration(connection, 2)
                 connection.commit()
         except sqlite3.Error as exc:
             LOGGER.error("SQLite schema initialization failed: %s", exc)
@@ -128,6 +123,80 @@ class SQLiteStore:
             raise sqlite3.DatabaseError(
                 f"Existing offers table is missing required columns: {missing_columns}"
             )
+
+    @staticmethod
+    def _record_migration(connection: sqlite3.Connection, version: int) -> None:
+        """Record a migration only after its schema changes succeeded."""
+
+        connection.execute(
+            f"""
+            INSERT INTO {_MIGRATIONS_TABLE} (version, applied_at)
+            VALUES (?, ?)
+            """,
+            (version, datetime.now(LOCAL_TIMEZONE).isoformat()),
+        )
+
+    @staticmethod
+    def _apply_trip_schema(connection: sqlite3.Connection) -> None:
+        """Create the trip-scoped persistence tables and their relationships."""
+
+        connection.execute(
+            """
+            CREATE TABLE trips (
+                trip_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                pickup_start TEXT NOT NULL,
+                pickup_end TEXT NOT NULL,
+                start_city TEXT NOT NULL,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE trip_recipients (
+                trip_id TEXT NOT NULL,
+                normalized_email TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (trip_id, normalized_email),
+                FOREIGN KEY (trip_id) REFERENCES trips(trip_id) ON DELETE CASCADE
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE trip_offers (
+                trip_id TEXT NOT NULL,
+                offer_id TEXT NOT NULL,
+                distance_km REAL NOT NULL,
+                is_available INTEGER NOT NULL DEFAULT 1
+                    CHECK (is_available IN (0, 1)),
+                first_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                unavailable_since TEXT NULL,
+                is_sent INTEGER NOT NULL DEFAULT 0 CHECK (is_sent IN (0, 1)),
+                sent_at TEXT NULL,
+                PRIMARY KEY (trip_id, offer_id),
+                FOREIGN KEY (trip_id) REFERENCES trips(trip_id) ON DELETE CASCADE,
+                FOREIGN KEY (offer_id) REFERENCES offers(id)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE trip_overview_slots (
+                trip_id TEXT NOT NULL,
+                local_date TEXT NOT NULL,
+                slot_hour INTEGER NOT NULL,
+                sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (trip_id, local_date, slot_hour),
+                FOREIGN KEY (trip_id) REFERENCES trips(trip_id) ON DELETE CASCADE
+            )
+            """
+        )
 
     def read_offers(self, *, include_deleted: bool = False) -> dict[str, StoredOffer]:
         """Read persisted offers for the next delta calculation."""
