@@ -173,9 +173,10 @@ Longitude. Er verwendet die Haversine-Formel, liefert Kilometerwerte und
 rundet erst für die Darstellung auf eine Nachkommastelle. Die ungerundete
 Berechnung ist für Sortierung und Schwellenentscheidung maßgeblich:
 
-- unter 100 km: starke grüne Hervorhebung,
-- 100 km bis unter 250 km: dezente gelbe Hervorhebung,
-- ab 250 km: neutrale Darstellung.
+- unter 100 km: rote Hervorhebung,
+- 100 km bis unter 250 km: orange Hervorhebung,
+- 250 km bis unter 500 km: gelbe Hervorhebung,
+- ab 500 km: neutrale Darstellung.
 
 ### 7.3 OpenStreetMap-Grenze
 
@@ -282,7 +283,7 @@ von Doppelbenachrichtigungen und fälschlich entfernten Angeboten.
 | Angebot-zu-Reise-Lebenszyklus | Globale Angebote, pro Reise eigene persistente Zuordnung, Verfügbarkeit und Versandstatus |
 | Ortsauflösung | Koordinaten je Reise verpflichtend; OpenStreetMap nicht im Standard-Laufzeitpfad |
 | Distanz | Haversine in km, Darstellung mit einer Nachkommastelle |
-| Highlighting | Grün unter 100 km, gelb von 100 bis unter 250 km, sonst neutral |
+| Highlighting | Rot unter 100 km, orange von 100 bis unter 250 km, gelb von 250 bis unter 500 km, sonst neutral |
 | Verwaltungswerkzeug | Unterbefehls-CLI, lesbare Ausgabe plus optional JSON, nicht-null Fehlercode |
 | Gmail | SMTP, separates Konto, App-Passwort, Geheimnisse außerhalb des Quellcodes |
 | E2E | Hermetisch mit Test-Doubles, keine externen Live-Dienste |

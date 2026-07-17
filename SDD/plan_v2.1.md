@@ -24,7 +24,7 @@ Nicht Gegenstand dieses Dokuments sind Implementierungsaufgaben oder Code.
 | Mehrfachtreffer | Dasselbe Angebot kann mehreren Reisen zugeordnet und für jede Reise eigenständig als neu versendet werden. |
 | Verfügbarkeit | Nach erfolgreichem vollständigem Poll einer Reise werden deren nicht gelieferten Zuordnungen als nicht verfügbar markiert. Ein Poll-Fehler ändert keine Verfügbarkeit. |
 | Distanz | Haversine-Formel; Kilometer; Darstellung mit einer Nachkommastelle. Die ungerundete Distanz bestimmt Sortierung und Schwellen. |
-| Distanzstufen | Unter 100 km: starke grüne Hervorhebung. 100 km bis unter 250 km: dezente gelbe Hervorhebung. Ab 250 km: neutral. |
+| Distanzstufen | Unter 100 km: rote Hervorhebung. 100 km bis unter 250 km: orange Hervorhebung. 250 km bis unter 500 km: gelbe Hervorhebung. Ab 500 km: neutral. |
 | Altes Highlighting | Die bisherige Deutschland-/Mindestdauer-Regel wird vollständig entfernt und nicht parallel fortgeführt. |
 | Übersichten | Die bisherigen Übersichten um 09:00 und 21:00 Uhr bleiben erhalten, werden aber pro Reise und nur an deren Empfänger versendet. |
 | Polling | Reisen werden innerhalb eines Zyklus sequenziell und fehlerisoliert verarbeitet; bestehende HTTP-Retries gelten pro Reise. |
@@ -234,7 +234,7 @@ Versanddaten. Eine getrennte Reise-Angebot-Ansicht trägt:
 Der Distanzdienst akzeptiert die Koordinaten von Reise und Angebotsstart. Er
 berechnet Haversine-Kilometer, speichert/ordnet nach dem ungerundeten Wert und
 rundet ausschließlich zur Darstellung auf eine Nachkommastelle. Seine
-Klassifikation ist: `<100`, `>=100 und <250`, `>=250`.
+Klassifikation ist: `<100`, `>=100 und <250`, `>=250 und <500`, `>=500`.
 
 ### 7.4 Persistenz
 

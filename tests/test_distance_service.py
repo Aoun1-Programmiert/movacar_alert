@@ -32,10 +32,12 @@ def test_distance_between_locations_uses_domain_coordinates() -> None:
 @pytest.mark.parametrize(
     ("distance", "tier"),
     (
-        (99.999999, DistanceTier.GREEN),
-        (100, DistanceTier.YELLOW),
-        (249.999999, DistanceTier.YELLOW),
-        (250, DistanceTier.NEUTRAL),
+        (99.999999, DistanceTier.RED),
+        (100, DistanceTier.ORANGE),
+        (249.999999, DistanceTier.ORANGE),
+        (250, DistanceTier.YELLOW),
+        (499.999999, DistanceTier.YELLOW),
+        (500, DistanceTier.NEUTRAL),
     ),
 )
 def test_classification_uses_unrounded_thresholds(
@@ -47,7 +49,7 @@ def test_classification_uses_unrounded_thresholds(
 def test_rounding_is_only_for_presentation() -> None:
     distance = 99.96
 
-    assert classify_distance(distance) is DistanceTier.GREEN
+    assert classify_distance(distance) is DistanceTier.RED
     assert round_distance_km(distance) == 100.0
 
 

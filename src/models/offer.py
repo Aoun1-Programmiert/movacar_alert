@@ -87,7 +87,8 @@ class Offer:
 class DistanceTier(str, Enum):
     """The explicit distance classification used by trip views."""
 
-    GREEN = "green"
+    RED = "red"
+    ORANGE = "orange"
     YELLOW = "yellow"
     NEUTRAL = "neutral"
 
@@ -100,8 +101,10 @@ class DistanceTier(str, Enum):
         if not isfinite(distance_km) or distance_km < 0:
             raise ValueError("Distance must be a finite, non-negative number of kilometres.")
         if distance_km < 100:
-            return cls.GREEN
+            return cls.RED
         if distance_km < 250:
+            return cls.ORANGE
+        if distance_km < 500:
             return cls.YELLOW
         return cls.NEUTRAL
 

@@ -22,7 +22,7 @@ Der Umfang dieses Zyklus umfasst sämtliche zum Zyklusbeginn offenen Punkte:
 4. Entscheidung und Umsetzung einer Zuordnung zwischen Angeboten und Reisen.
 5. Auflösung der konfigurierten Startstadt über OpenStreetMap sowie Berechnung der Luftlinienentfernung zu Angeboten.
 6. Sortierung der Angebote nach Entfernung zur Startstadt.
-7. Entfernungsspezifisches Highlighting für Angebote unter 100 km beziehungsweise unter 250 km.
+7. Entfernungsspezifisches Highlighting für Angebote unter 100 km, von 100 bis unter 250 km sowie von 250 bis unter 500 km.
 8. Anpassung der E-Mail-Templates um Reiseinformationen und Distanz-Highlighting.
 9. Ein Verwaltungswerkzeug für typische Reise- und Empfängeroperationen.
 10. Einrichtung und Nutzung eines separaten Gmail-Kontos für den Versand der Benachrichtigungen.
@@ -58,7 +58,7 @@ Nicht Bestandteil dieses Zyklus sind:
 - Das System verwendet für die Startstadt einer Reise geografische Koordinaten, die vorrangig über OpenStreetMap aufgelöst werden. Ist diese Auflösung nicht ausreichend zuverlässig, sind Längen- und Breitengrad verpflichtend für die Reise zu hinterlegen.
 - Für jedes Angebot berechnet das System die Luftlinienentfernung zwischen dessen Startposition und der Startstadt der zugehörigen Reise.
 - Jedes E-Mail-Template listet zuerst die neu erkannten Angebote auf.
-- Neue Angebote innerhalb von 100 km und innerhalb von 250 km werden unterschiedlich hervorgehoben.
+- Neue Angebote unter 100 km, von 100 bis unter 250 km und von 250 bis unter 500 km werden unterschiedlich hervorgehoben.
 - Unterhalb der neuen Angebote listet das E-Mail-Template alle aktuell verfügbaren Angebote, einschließlich der neu erkannten Angebote, aufsteigend nach ihrer Entfernung zur Startstadt der Reise auf.
 
 ### 5.4 E-Mail-Versand
@@ -112,7 +112,7 @@ Die folgenden Punkte sind absichtlich nicht in dieser SPEC entschieden und müss
 - Modell und Lebenszyklus der Angebots-zu-Reise-Zuordnung, insbesondere bei einem Angebot, das zu mehreren Reisen passt.
 - Entscheidung zwischen einer OpenStreetMap-basierten Ortsauflösung und verpflichtend hinterlegten Längen- und Breitengraden je Reise sowie, bei OpenStreetMap-Nutzung, Endpunkt, Fehlerbehandlung, Rate-Limit-Strategie und Caching.
 - Formel, Einheiten, Rundung und Darstellung der Luftlinienentfernung.
-- Präzise Darstellung und Priorität der Highlighting-Stufen unter 100 km und unter 250 km.
+- Präzise Darstellung und Priorität der Highlighting-Stufen unter 100 km, von 100 bis unter 250 km, von 250 bis unter 500 km und ab 500 km.
 - Ausgestaltung, Ein- und Ausgabeformate sowie Fehlerverhalten der Verwaltungs-CLI.
 - Konkrete Gmail-Authentifizierung, Konto-Provisionierung und benötigte Konfigurationswerte.
 - Umfang und technische Ausführung des E2E-Tests, einschließlich der Test-Doubles für externe Dienste.

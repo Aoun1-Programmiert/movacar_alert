@@ -64,7 +64,7 @@ reise- oder versandspezifischen Attribute.
 
 - Reise enthält Identität, Name, Pick-up-Beginn/-Ende, Startstadt, Latitude und Longitude.
 - Reise-Angebotsansicht enthält Reise- und Angebotsbezug, ungerundete Distanz, Verfügbarkeits- und Versandstatus sowie Distanzstufe.
-- Distanzstufen bilden `<100`, `>=100 und <250` und `>=250` eindeutig ab.
+- Distanzstufen bilden `<100`, `>=100 und <250`, `>=250 und <500` und `>=500` eindeutig ab.
 - `ClassifiedOffer` und boolesches Althighlight sind nicht Teil des neuen Fachvertrags.
 
 **Betroffene Dateien/Pfade:** `src/models/offer.py`, `src/models/`, `tests/test_models_offer.py`, neue domänenbezogene Tests unter `tests/`  
@@ -232,7 +232,7 @@ die Klassifikation der verbindlichen Distanzstufen bereitstellen.
 - Die Distanz wird in Kilometern mittels Haversine aus Reise- und Angebotskoordinaten bestimmt.
 - Sortierung und Schwellen verwenden den ungerundeten Wert.
 - Die Darstellung rundet ausschließlich auf eine Nachkommastelle.
-- Die drei Stufen grün, gelb und neutral folgen exakt den Plan-Schwellen.
+- Die vier Stufen rot, orange, gelb und neutral folgen exakt den Plan-Schwellen.
 
 **Betroffene Dateien/Pfade:** neue Distanzkomponente unter `src/`, neue Distanztests unter `tests/`  
 **Abhängigkeiten:** T01  
@@ -364,7 +364,7 @@ danach sowie die drei Distanzdarstellungen.
 - Sofortmails listen neue Angebote vor dem vollständigen Verfügbarkeitsabschnitt.
 - Der vollständige Abschnitt enthält neue Angebote erneut und ist distanzsortiert.
 - Reisenamen und weitere Reiseinformationen sind sichtbar.
-- Unter 100 km ist stark grün, 100 bis unter 250 km dezent gelb und ab 250 km neutral dargestellt.
+- Unter 100 km ist rot, 100 bis unter 250 km orange, 250 bis unter 500 km gelb und ab 500 km neutral dargestellt.
 - Übersichten enthalten keine Versandentscheidungs-Kennzeichnung, aber Reise- und Distanzinformationen.
 
 **Betroffene Dateien/Pfade:** `src/mailer/templates.py`, `tests/test_mail_templates.py`  

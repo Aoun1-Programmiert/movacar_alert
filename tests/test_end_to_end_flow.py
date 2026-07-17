@@ -215,7 +215,7 @@ def test_complete_trip_journey_is_hermetic(
     north_window = ("2026-07-20", "2026-07-25")
     south_window = ("2026-08-10", "2026-08-15")
     shared_offer = ("shared", "Potsdam", 52.4, 13.1)
-    yellow_offer = ("yellow", "Leipzig", 51.3397, 12.3731)
+    orange_offer = ("orange", "Leipzig", 51.3397, 12.3731)
     response_mode = {"value": "initial"}
     requests: list[tuple[str, dict[str, list[str]]]] = []
 
@@ -231,9 +231,9 @@ def test_complete_trip_journey_is_hermetic(
             raise URLError("simulated Movacar outage")
         if window == north_window:
             offers = (
-                (yellow_offer,)
+                (orange_offer,)
                 if response_mode["value"] == "north-without-shared"
-                else (shared_offer, yellow_offer)
+                else (shared_offer, orange_offer)
             )
         elif window == south_window:
             offers = (shared_offer,)
@@ -292,15 +292,15 @@ def test_complete_trip_journey_is_hermetic(
         assert "Nordfahrt" in html
         assert "20.07.2026 bis 25.07.2026" in html
         assert "Startstadt:</strong> Berlin" in html
-        assert "offer--green" in html
-        assert "offer--yellow" in html
+        assert "offer--red" in html
+        assert "offer--orange" in html
         assert _offer_ids_in_order(html, "available-offers") == [
             "shared",
-            "yellow",
+            "orange",
         ]
     assert _offer_ids_in_order(north_instant, "new-offers") == [
         "shared",
-        "yellow",
+        "orange",
     ]
     assert "Südfahrt" in south_instant
     assert 'data-offer-id="shared"' in south_instant
@@ -332,7 +332,7 @@ def test_complete_trip_journey_is_hermetic(
     assert len(mail_attempts) == attempts_before_failure
     assert [
         view.offer_id for view in store.list_available_trip_offers("north")
-    ] == ["shared", "yellow"]
+    ] == ["shared", "orange"]
 
     response_mode["value"] = "north-without-shared"
     availability_cycle = poll_loop.run_orchestration_cycle(
@@ -342,7 +342,7 @@ def test_complete_trip_journey_is_hermetic(
     assert availability_cycle.completed_trip_count == 2
     assert [
         view.offer_id for view in store.list_available_trip_offers("north")
-    ] == ["yellow"]
+    ] == ["orange"]
     assert [
         view.offer_id for view in store.list_available_trip_offers("south")
     ] == ["shared"]
@@ -359,10 +359,10 @@ def test_complete_trip_journey_is_hermetic(
             FROM trip_offers
             ORDER BY trip_id, offer_id
             """
-        ).fetchall() == [("north", "yellow"), ("south", "shared")]
+        ).fetchall() == [("north", "orange"), ("south", "shared")]
         assert connection.execute(
             "SELECT id FROM offers ORDER BY id"
-        ).fetchall() == [("shared",), ("yellow",)]
+        ).fetchall() == [("orange",), ("shared",)]
 
     run_cli("trip", "delete", "--trip-id", "north")
     run_cli("trip", "delete", "--trip-id", "south")

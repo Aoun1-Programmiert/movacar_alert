@@ -77,10 +77,12 @@ def test_instant_template_renders_trip_details_and_new_offers_first() -> None:
 @pytest.mark.parametrize(
     ("distance", "offer_class", "distance_class"),
     (
-        (99.999, "offer--green", "distance--green"),
-        (100, "offer--yellow", "distance--yellow"),
-        (249.999, "offer--yellow", "distance--yellow"),
-        (250, "offer--neutral", "distance--neutral"),
+        (99.999, "offer--red", "distance--red"),
+        (100, "offer--orange", "distance--orange"),
+        (249.999, "offer--orange", "distance--orange"),
+        (250, "offer--yellow", "distance--yellow"),
+        (499.999, "offer--yellow", "distance--yellow"),
+        (500, "offer--neutral", "distance--neutral"),
     ),
 )
 def test_template_renders_all_distance_tiers(
@@ -104,8 +106,8 @@ def test_template_uses_trip_distance_tier_without_legacy_duration_or_country_rul
 
     html = render_offer_email(TripMailView(make_trip(), ("a@example.test",), (view,), (view,)))
 
-    assert 'class="offer offer--green"' in html
-    assert 'class="distance--green"' in html
+    assert 'class="offer offer--red"' in html
+    assert 'class="distance--red"' in html
 
 
 def test_summary_contains_trip_and_distance_without_new_offer_classification() -> None:
@@ -149,7 +151,7 @@ def test_template_escapes_trip_and_offer_content_and_renders_empty_sections() ->
         is_available=True,
         state="new",
         is_sent=False,
-        distance_tier=DistanceTier.GREEN,
+        distance_tier=DistanceTier.RED,
     )
     view = TripMailView(trip, ("a@example.test",), (offer,), (offer,))
 

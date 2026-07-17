@@ -86,8 +86,8 @@ def test_prepare_mail_view_is_trip_scoped_sorted_and_includes_new_in_both_sectio
         new_near.id,
         sent_far.id,
     ]
-    assert view.new_offers[0].distance_tier is DistanceTier.GREEN
-    assert view.available_offers[1].distance_tier is DistanceTier.YELLOW
+    assert view.new_offers[0].distance_tier is DistanceTier.RED
+    assert view.available_offers[1].distance_tier is DistanceTier.ORANGE
     assert view.available_offers[0].distance_km < view.available_offers[1].distance_km
     assert view.new_offers[0].offer.origin == new_near.origin
     assert view.available_offers[1].is_sent is True

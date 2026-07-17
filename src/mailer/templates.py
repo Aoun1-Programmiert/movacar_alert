@@ -22,10 +22,12 @@ def render_offer_email(view: TripMailView) -> str:
     .trip-details {{ background: #f5f5f5; padding: 12px; }}
     .offer-list {{ padding: 0; }}
     .offer {{ list-style: none; margin: 0 0 12px; padding: 12px; border: 1px solid #ddd; }}
-    .offer--green {{ background: #d9f7d9; border: 2px solid #198754; }}
+    .offer--red {{ background: #f8d7da; border: 2px solid #dc3545; }}
+    .offer--orange {{ background: #fff0d5; border: 1px solid #d97706; }}
     .offer--yellow {{ background: #fff8d6; border: 1px solid #d39e00; }}
     .offer--neutral {{ background: #fff; }}
-    .distance--green {{ color: #126b35; font-weight: bold; }}
+    .distance--red {{ color: #9f1239; font-weight: bold; }}
+    .distance--orange {{ color: #9a3412; }}
     .distance--yellow {{ color: #7a5a00; }}
     .distance--neutral {{ color: #555; }}
     .empty-section {{ color: #666; font-style: italic; }}
@@ -55,10 +57,12 @@ def render_offer_summary_email(view: TripMailView) -> str:
     .trip-details {{ background: #f5f5f5; padding: 12px; }}
     .offer-list {{ padding: 0; }}
     .offer {{ list-style: none; margin: 0 0 12px; padding: 12px; border: 1px solid #ddd; }}
-    .offer--green {{ background: #d9f7d9; border: 2px solid #198754; }}
+    .offer--red {{ background: #f8d7da; border: 2px solid #dc3545; }}
+    .offer--orange {{ background: #fff0d5; border: 1px solid #d97706; }}
     .offer--yellow {{ background: #fff8d6; border: 1px solid #d39e00; }}
     .offer--neutral {{ background: #fff; }}
-    .distance--green {{ color: #126b35; font-weight: bold; }}
+    .distance--red {{ color: #9f1239; font-weight: bold; }}
+    .distance--orange {{ color: #9a3412; }}
     .distance--yellow {{ color: #7a5a00; }}
     .distance--neutral {{ color: #555; }}
     .empty-section {{ color: #666; font-style: italic; }}

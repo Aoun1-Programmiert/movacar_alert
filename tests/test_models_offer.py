@@ -60,10 +60,12 @@ def test_trip_recipient_is_trip_scoped() -> None:
 @pytest.mark.parametrize(
     ("distance", "tier"),
     (
-        (99.999, DistanceTier.GREEN),
-        (100, DistanceTier.YELLOW),
-        (249.999, DistanceTier.YELLOW),
-        (250, DistanceTier.NEUTRAL),
+        (99.999, DistanceTier.RED),
+        (100, DistanceTier.ORANGE),
+        (249.999, DistanceTier.ORANGE),
+        (250, DistanceTier.YELLOW),
+        (499.999, DistanceTier.YELLOW),
+        (500, DistanceTier.NEUTRAL),
     ),
 )
 def test_distance_tier_boundaries_are_unambiguous(
@@ -82,7 +84,7 @@ def test_trip_offer_view_keeps_trip_offer_and_reisespecific_status(
         is_available=True,
         state="new",
         is_sent=False,
-        distance_tier=DistanceTier.GREEN,
+        distance_tier=DistanceTier.RED,
     )
 
     assert view.trip is trip
@@ -92,7 +94,7 @@ def test_trip_offer_view_keeps_trip_offer_and_reisespecific_status(
     assert view.is_available is True
     assert view.state == "new"
     assert view.is_sent is False
-    assert view.distance_tier is DistanceTier.GREEN
+    assert view.distance_tier is DistanceTier.RED
 
 
 @pytest.mark.parametrize(
@@ -143,7 +145,7 @@ def test_trip_offer_view_rejects_mismatched_tier(trip: Trip, offer: Offer) -> No
             is_available=True,
             state="existing",
             is_sent=True,
-            distance_tier=DistanceTier.YELLOW,
+            distance_tier=DistanceTier.RED,
         )
 
 
