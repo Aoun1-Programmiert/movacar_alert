@@ -168,6 +168,31 @@ def test_all_trips_are_processed_sequentially(
     ]
 
 
+def test_successful_trip_processing_logs_trip_context_and_result_counts(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: SimpleNamespace,
+    trips: list[Trip],
+    offer: Offer,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    store = FakeStore(trips[:1])
+    _stub_successful_processing(monkeypatch, offer)
+
+    with caplog.at_level("INFO"):
+        result = poll_loop.run_orchestration_cycle(
+            settings, store, now=datetime(2026, 7, 17, 8)
+        )
+
+    assert result.trip_results == (
+        poll_loop.TripProcessingResult("trip-1", "Sommerfahrt", completed=True),
+    )
+    assert "id=trip-1" in caplog.text
+    assert "name=Sommerfahrt" in caplog.text
+    assert "1 Angebote synchronisiert" in caplog.text
+    assert "Sofortmail=versendet" in caplog.text
+    assert "Übersicht=nicht versendet" in caplog.text
+
+
 @pytest.mark.parametrize(
     "error",
     (ApiNetworkError("offline"), OfferParsingError("malformed")),

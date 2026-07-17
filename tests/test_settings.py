@@ -90,6 +90,25 @@ def test_load_settings_ignores_legacy_settings_without_validating_them(
         assert legacy_name in caplog.text
 
 
+def test_loaded_settings_expose_no_global_recipient_or_bounding_box_contract(
+    valid_environment: dict[str, str],
+) -> None:
+    valid_environment.update(
+        {
+            "SMTP_TO": "legacy@example.test",
+            "DE_BBOX_MIN_LAT": "47.0",
+            "DE_BBOX_MAX_LAT": "55.0",
+            "DE_BBOX_MIN_LON": "5.0",
+            "DE_BBOX_MAX_LON": "16.0",
+        }
+    )
+
+    settings = load_settings(valid_environment)
+
+    assert not hasattr(settings, "smtp_to")
+    assert not hasattr(settings, "bounding_box")
+
+
 @pytest.mark.parametrize(
     ("name", "value", "message"),
     (

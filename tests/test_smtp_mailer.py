@@ -72,6 +72,38 @@ def test_send_html_email_uses_explicit_trip_recipients(
 
 
 @patch("src.mailer.smtp_mailer.smtplib.SMTP")
+def test_send_html_email_keeps_recipients_isolated_between_trip_sends(
+    smtp_constructor: MagicMock, smtp_settings: SmtpSettings
+) -> None:
+    smtp = smtp_constructor.return_value.__enter__.return_value
+    smtp.send_message.return_value = {}
+
+    send_html_email(
+        smtp_settings,
+        "<p>Erste Reise</p>",
+        recipients=("first-trip@example.test",),
+    )
+    send_html_email(
+        smtp_settings,
+        "<p>Zweite Reise</p>",
+        recipients=("second-trip@example.test",),
+    )
+
+    assert smtp.send_message.call_count == 2
+    first_message, second_message = (
+        call.args[0] for call in smtp.send_message.call_args_list
+    )
+    assert first_message["To"] == "first-trip@example.test"
+    assert second_message["To"] == "second-trip@example.test"
+    assert [
+        call.kwargs["to_addrs"] for call in smtp.send_message.call_args_list
+    ] == [
+        ("first-trip@example.test",),
+        ("second-trip@example.test",),
+    ]
+
+
+@patch("src.mailer.smtp_mailer.smtplib.SMTP")
 def test_send_html_email_requires_explicit_recipients(
     smtp_constructor: MagicMock, smtp_settings: SmtpSettings
 ) -> None:
