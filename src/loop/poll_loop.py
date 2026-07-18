@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import logging
 import time
 
-from src.api.api_client import ApiClientError, fetch_offers
+from src.api.api_client import ApiClientError, build_trip_url, fetch_offers
 from src.config.settings import Settings
 from src.config.timezone import LOCAL_TIMEZONE
 from src.mailer.smtp_mailer import SmtpSendError, send_html_email
@@ -93,6 +93,8 @@ def _process_one_trip(
     """Fetch, synchronize, and notify for one trip."""
 
     try:
+        api_url = getattr(settings, "api_url", None)
+        offers_url = build_trip_url(api_url, trip) if api_url is not None else None
         response = fetch_offers(settings, trip)
         offers = _with_local_dates(parse_offers(response))
     except (ApiClientError, OfferParsingError) as error:
@@ -110,6 +112,7 @@ def _process_one_trip(
             store,
             settings.smtp,
             trip,
+            offers_url=offers_url,
             composer=render_offer_email,
             mailer=send_html_email,
         )
@@ -123,6 +126,7 @@ def _process_one_trip(
             settings.smtp,
             trip,
             now,
+            offers_url=offers_url,
             composer=render_offer_summary_email,
             mailer=send_html_email,
         )

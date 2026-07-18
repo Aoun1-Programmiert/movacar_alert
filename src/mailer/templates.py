@@ -36,6 +36,7 @@ def render_offer_email(view: TripMailView) -> str:
 <body>
   <h1>Neue Movacar-Angebote</h1>
   {_render_trip_details(view)}
+  {_render_offers_link(view)}
   {_render_section("new-offers", "Neue Angebote", view.new_offers)}
   {_render_section("available-offers", "Alle verfügbaren Angebote", view.available_offers)}
 </body>
@@ -71,6 +72,7 @@ def render_offer_summary_email(view: TripMailView) -> str:
 <body>
   <h1>Aktuelle Movacar-Angebote</h1>
   {_render_trip_details(view)}
+  {_render_offers_link(view)}
   {_render_section("available-offers", "Alle verfügbaren Angebote", view.available_offers)}
 </body>
 </html>
@@ -89,8 +91,19 @@ def _render_trip_details(view: TripMailView) -> str:
     <div><strong>Reise:</strong> {escape(trip.name)}</div>
     <div><strong>Pick-up-Zeitraum:</strong> {trip.pickup_start.strftime("%d.%m.%Y")} bis {trip.pickup_end.strftime("%d.%m.%Y")}</div>
     <div><strong>Startstadt:</strong> {escape(trip.start_city)}</div>
-    <div><strong>Koordinaten:</strong> {trip.latitude:.5f}, {trip.longitude:.5f}</div>
   </section>"""
+
+
+def _render_offers_link(view: TripMailView) -> str:
+    if view.offers_url is None:
+        return ""
+    escaped_url = escape(view.offers_url, quote=True)
+    return (
+        '  <p><a href="'
+        f"{escaped_url}"
+        '">Hier der Link zu den Angeboten</a>'
+        f' <span>Angebote insgesamt: {len(view.available_offers)}</span></p>'
+    )
 
 
 def _render_section(

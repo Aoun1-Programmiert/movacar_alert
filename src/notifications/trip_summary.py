@@ -25,6 +25,7 @@ def send_due_trip_summary(
     trip: Trip,
     now: datetime,
     *,
+    offers_url: str | None = None,
     composer: MailComposer,
     mailer: MailSender = send_html_email,
 ) -> bool:
@@ -36,7 +37,7 @@ def send_due_trip_summary(
     ):
         return False
 
-    view = prepare_trip_mail_view(store, trip)
+    view = prepare_trip_mail_view(store, trip, offers_url=offers_url)
     if not view.recipients:
         raise MissingTripRecipientsError(
             f"Trip {trip.trip_id!r} has no recipients for overview notifications."

@@ -24,12 +24,13 @@ def send_instant_trip_notification(
     smtp_settings: SmtpSettings,
     trip: Trip,
     *,
+    offers_url: str | None = None,
     composer: MailComposer,
     mailer: MailSender = send_html_email,
 ) -> bool:
     """Send one trip's new offers and persist delivery only after SMTP acceptance."""
 
-    view = prepare_trip_mail_view(store, trip)
+    view = prepare_trip_mail_view(store, trip, offers_url=offers_url)
     if not view.new_offers:
         return False
     if not view.recipients:

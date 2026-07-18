@@ -36,7 +36,7 @@ class ApiResponseError(ApiClientError):
 def fetch_offers(settings: Settings, trip: Trip) -> dict[str, Any]:
     """Fetch and validate offers for one trip's pickup window."""
 
-    request = Request(_build_trip_url(settings.api_url, trip), method="GET")
+    request = Request(build_trip_url(settings.api_url, trip), method="GET")
 
     for attempt in range(MAX_RETRIES + 1):
         try:
@@ -66,7 +66,7 @@ def fetch_offers(settings: Settings, trip: Trip) -> dict[str, Any]:
     raise AssertionError("The retry loop must return or raise.")
 
 
-def _build_trip_url(api_url: str, trip: Trip) -> str:
+def build_trip_url(api_url: str, trip: Trip) -> str:
     """Add the confirmed Movacar query parameters to the configured API URL."""
 
     parsed = urlsplit(api_url)

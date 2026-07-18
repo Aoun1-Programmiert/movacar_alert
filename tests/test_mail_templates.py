@@ -59,10 +59,18 @@ def test_instant_template_renders_trip_details_and_new_offers_first() -> None:
         ("recipient@example.test",),
         (new_offer,),
         (new_offer, available_offer),
+        "https://api.example.test/offers?pickupDateFrom=2026-07-20&pickupDateTo=2026-07-25",
     )
 
     html = render_offer_email(view)
 
+    assert "Hier der Link zu den Angeboten" in html
+    assert (
+        'href="https://api.example.test/offers?pickupDateFrom=2026-07-20&amp;'
+        'pickupDateTo=2026-07-25"'
+    ) in html
+    assert "Angebote insgesamt: 2" in html
+    assert html.index("Hier der Link zu den Angeboten") < html.index('id="new-offers"')
     assert html.index('id="new-offers"') < html.index('id="available-offers"')
     assert html.index('data-offer-id="new-1"') < html.index(
         'id="available-offers"'
@@ -70,6 +78,7 @@ def test_instant_template_renders_trip_details_and_new_offers_first() -> None:
     assert "Sommerfahrt" in html
     assert "20.07.2026 bis 25.07.2026" in html
     assert "Startstadt:</strong> Berlin" in html
+    assert "Koordinaten:" not in html
     assert "Entfernung zur Startstadt: 100.0 km" in html
     assert html.count('data-offer-id="new-1"') == 2
 
@@ -113,11 +122,22 @@ def test_template_uses_trip_distance_tier_without_legacy_duration_or_country_rul
 def test_summary_contains_trip_and_distance_without_new_offer_classification() -> None:
     trip = make_trip()
     offer = make_view("current", 12.3, trip=trip)
-    view = TripMailView(trip, ("recipient@example.test",), (), (offer,))
+    view = TripMailView(
+        trip,
+        ("recipient@example.test",),
+        (),
+        (offer,),
+        "https://api.example.test/offers",
+    )
 
     html = render_offer_summary_email(view)
 
     assert "Reiseinformationen" in html
+    assert (
+        '<a href="https://api.example.test/offers">Hier der Link zu den Angeboten</a>'
+        " <span>Angebote insgesamt: 1</span>"
+    ) in html
+    assert "Koordinaten:" not in html
     assert "Entfernung zur Startstadt: 12.3 km" in html
     assert "Neue Angebote" not in html
     assert "Versendet" not in html

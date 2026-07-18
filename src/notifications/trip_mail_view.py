@@ -16,6 +16,7 @@ class TripMailView:
     recipients: tuple[str, ...]
     new_offers: tuple[TripOfferView, ...]
     available_offers: tuple[TripOfferView, ...]
+    offers_url: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.trip, Trip):
@@ -24,6 +25,8 @@ class TripMailView:
             raise ValueError("TripMailView recipients must be non-empty email strings.")
         if len(set(self.recipients)) != len(self.recipients):
             raise ValueError("TripMailView recipients must be unique.")
+        if self.offers_url is not None and not self.offers_url:
+            raise ValueError("TripMailView offers_url must not be empty.")
         self._validate_offers(self.new_offers, require_unsent=True)
         self._validate_offers(self.available_offers, require_unsent=False)
 
@@ -43,7 +46,9 @@ class TripMailView:
             previous_distance = offer_view.distance_km
 
 
-def prepare_trip_mail_view(store: SQLiteStore, trip: Trip) -> TripMailView:
+def prepare_trip_mail_view(
+    store: SQLiteStore, trip: Trip, *, offers_url: str | None = None
+) -> TripMailView:
     """Load the two ordered offer sections and recipients for one trip."""
 
     if not isinstance(store, SQLiteStore):
@@ -57,4 +62,4 @@ def prepare_trip_mail_view(store: SQLiteStore, trip: Trip) -> TripMailView:
     )
     new_offers = tuple(store.list_new_unsent_available_trip_offers(trip.trip_id))
     available_offers = tuple(store.list_available_trip_offers(trip.trip_id))
-    return TripMailView(trip, recipients, new_offers, available_offers)
+    return TripMailView(trip, recipients, new_offers, available_offers, offers_url)
