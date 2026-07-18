@@ -1,6 +1,13 @@
 # Movacar Alert
 
-## Nächste Schritte
+## Upcoming Features
+
+[ ] API Schnittstelle für das erstellen von Trips
+[ ] Hinzufügen von weiteren Anbietern wie imoova
+    [ ] Vorstellungen und Ideen nochmal ausformulieren
+
+
+### API Schnittstellen Feature und Vorstellungen
 
 Ich möchte das CLI-Script zum Erstellen von Reisen per API ansprechbar machen
 diese API soll dann über eine bereitgestellte Website Aufrufbar sein
@@ -12,6 +19,8 @@ in einer SQL Tabelle abspeichern (Name, Koordinaten, Land)
 - dieses Land dann im ISO Format abspeichern (z.B. DE, AT, CH)
 - auf der Website soll es dann möglich sein, beim Anlegen der Stadt für die Reise vorschläge zu bekommen, 
 welche Städte bereits in der Datenbank vorhanden sind (Autocomplete)
+
+### Hinzufügen von weiteren Camper Reise Anbietern
 
 ## Überblick
 
