@@ -19,6 +19,8 @@ def offer() -> Offer:
         free_km=500,
         origin=GeoLocation("Berlin", 52.52, 13.405),
         destination=GeoLocation("Paris", 48.8566, 2.3522),
+        price_minor_units=1234,
+        currency="EUR",
     )
 
 
@@ -41,7 +43,8 @@ def test_read_returns_active_persisted_state(store: SQLiteStore, offer: Offer) -
         assert connection.execute(
             """
             SELECT id, start_date, end_date, origin_city, destination_city,
-                   free_km, first_seen_timestamp, is_deleted, deleted_at
+                   free_km, price_minor_units, currency, first_seen_timestamp,
+                   is_deleted, deleted_at
             FROM offers
             """
         ).fetchone() == (
@@ -51,6 +54,8 @@ def test_read_returns_active_persisted_state(store: SQLiteStore, offer: Offer) -
             "Berlin",
             "Paris",
             500,
+            1234,
+            "EUR",
             stored[offer.id].first_seen_timestamp,
             0,
             None,

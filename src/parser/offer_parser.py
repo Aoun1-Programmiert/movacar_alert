@@ -23,8 +23,12 @@ def parse_offers(response: Mapping[str, Any]) -> list[Offer]:
     data = _require_list(response, "data", "response")
     included = _require_list(response, "included", "response")
     stations = _index_stations(included)
+    monetary_amounts = _index_resources(included, "monetary_amount")
 
-    return [_parse_offer(record, index, stations) for index, record in enumerate(data)]
+    return [
+        _parse_offer(record, index, stations, monetary_amounts)
+        for index, record in enumerate(data)
+    ]
 
 
 def _index_stations(included: list[Any]) -> dict[str, Mapping[str, Any]]:
@@ -40,8 +44,28 @@ def _index_stations(included: list[Any]) -> dict[str, Mapping[str, Any]]:
     return stations
 
 
+def _index_resources(
+    included: list[Any], resource_type: str
+) -> dict[str, Mapping[str, Any]]:
+    resources: dict[str, Mapping[str, Any]] = {}
+    for resource in included:
+        if not isinstance(resource, Mapping) or resource.get("type") != resource_type:
+            continue
+
+        resource_id = _require_string(resource, "id", resource_type)
+        if resource_id in resources:
+            raise OfferParsingError(
+                f"Duplicate {resource_type} id '{resource_id}' in included."
+            )
+        resources[resource_id] = resource
+    return resources
+
+
 def _parse_offer(
-    record: Any, index: int, stations: Mapping[str, Mapping[str, Any]]
+    record: Any,
+    index: int,
+    stations: Mapping[str, Mapping[str, Any]],
+    monetary_amounts: Mapping[str, Mapping[str, Any]],
 ) -> Offer:
     offer = _require_mapping(record, f"data[{index}]")
     attributes = _require_mapping(offer.get("attributes"), f"data[{index}].attributes")
@@ -51,6 +75,9 @@ def _parse_offer(
 
     origin = _resolve_station(relationships, "origin", stations, index)
     destination = _resolve_station(relationships, "destination", stations, index)
+    price_minor_units, currency = _resolve_price(
+        relationships, monetary_amounts, index
+    )
 
     try:
         return Offer(
@@ -68,6 +95,8 @@ def _parse_offer(
             ),
             origin=origin,
             destination=destination,
+            price_minor_units=price_minor_units,
+            currency=currency,
         )
     except ValueError as error:
         raise OfferParsingError(f"Invalid data[{index}]: {error}") from error
@@ -115,9 +144,65 @@ def _resolve_station(
         raise OfferParsingError(f"Invalid station '{station_id}': {error}") from error
 
 
+def _resolve_price(
+    relationships: Mapping[str, Any],
+    monetary_amounts: Mapping[str, Mapping[str, Any]],
+    offer_index: int,
+) -> tuple[int | None, str | None]:
+    relationship_value = relationships.get("base_price")
+    if relationship_value is None:
+        return None, None
+
+    relationship = _require_mapping(
+        relationship_value, f"data[{offer_index}].relationships.base_price"
+    )
+    reference = _require_mapping(
+        relationship.get("data"),
+        f"data[{offer_index}].relationships.base_price.data",
+    )
+    if reference.get("type") != "monetary_amount":
+        raise OfferParsingError(
+            f"data[{offer_index}].relationships.base_price.data must reference "
+            "a monetary_amount."
+        )
+
+    amount_id = _require_string(
+        reference, "id", f"data[{offer_index}].relationships.base_price.data"
+    )
+    amount = monetary_amounts.get(amount_id)
+    if amount is None:
+        raise OfferParsingError(
+            f"data[{offer_index}].relationships.base_price references missing "
+            f"monetary_amount '{amount_id}'."
+        )
+
+    attributes = _require_mapping(
+        amount.get("attributes"), f"monetary_amount '{amount_id}'.attributes"
+    )
+    return (
+        _require_non_negative_integer(
+            attributes,
+            "amount_minor_units",
+            f"monetary_amount '{amount_id}'.attributes",
+        ),
+        _require_string(
+            attributes, "currency", f"monetary_amount '{amount_id}'.attributes"
+        ),
+    )
+
+
 def _require_mapping(value: Any, context: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
         raise OfferParsingError(f"{context} must be an object.")
+    return value
+
+
+def _require_non_negative_integer(
+    container: Mapping[str, Any], key: str, context: str
+) -> int:
+    value = _require_integer(container, key, context)
+    if value < 0:
+        raise OfferParsingError(f"{context}.{key} must not be negative.")
     return value
 
 

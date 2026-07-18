@@ -33,6 +33,11 @@ Die API wird standardmäßig zu den vollen Viertelstunden (`00`, `15`, `30`,
 `45`) abgefragt. Der erste Lauf wartet ebenfalls auf den nächsten solchen
 Zeitpunkt; `POLL_INTERVAL_MINUTES=15` steuert dabei die Rasterbreite.
 
+Wenn die API einen `base_price` liefert, wird der Preis inklusive Währung aus
+der Antwort übernommen, gespeichert und in der Angebots-E-Mail angezeigt.
+`amount_minor_units` wird dabei als kleinste Währungseinheit interpretiert,
+also beispielsweise `100` als `1,00 EUR`.
+
 ## Funktionen
 
 - Regelmäßige Abfrage einer frei konfigurierbaren HTTP(S)-API

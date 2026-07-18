@@ -70,6 +70,8 @@ class Offer:
     free_km: int
     origin: GeoLocation
     destination: GeoLocation
+    price_minor_units: int | None = None
+    currency: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.id, str) or not self.id.strip():
@@ -82,6 +84,18 @@ class Offer:
             raise ValueError("Offer free_km must be a non-negative integer.")
         if not isinstance(self.origin, GeoLocation) or not isinstance(self.destination, GeoLocation):
             raise ValueError("Offer origin and destination must be GeoLocation values.")
+        if self.price_minor_units is not None and (
+            not isinstance(self.price_minor_units, int)
+            or isinstance(self.price_minor_units, bool)
+            or self.price_minor_units < 0
+        ):
+            raise ValueError("Offer price_minor_units must be a non-negative integer.")
+        if self.currency is not None and (
+            not isinstance(self.currency, str) or not self.currency.strip()
+        ):
+            raise ValueError("Offer currency must be a non-empty string.")
+        if (self.price_minor_units is None) != (self.currency is None):
+            raise ValueError("Offer price and currency must either both be set or both be absent.")
 
 
 class DistanceTier(str, Enum):

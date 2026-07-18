@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from html import escape
 
-from src.models.offer import TripOfferView
+from src.models.offer import Offer, TripOfferView
 from src.notifications.trip_mail_view import TripMailView
 
 
@@ -128,5 +128,14 @@ def _render_offer(offer_view: TripOfferView) -> str:
       <strong>{escape(offer.origin.city)} &rarr; {escape(offer.destination.city)}</strong>
       <div>Zeitraum: {offer.start_date.strftime("%d.%m.%Y")} bis {offer.end_date.strftime("%d.%m.%Y")}</div>
       <div>Freikilometer: {offer.free_km}</div>
+      {_render_offer_price(offer)}
       <div class="{distance_class}">Entfernung zur Startstadt: {offer_view.distance_km_rounded:.1f} km</div>
     </li>"""
+
+
+def _render_offer_price(offer: Offer) -> str:
+    amount = offer.price_minor_units
+    currency = offer.currency
+    if amount is None or currency is None:
+        return ""
+    return f"      <div>Preis: {amount / 100:.2f} {escape(currency)}</div>"

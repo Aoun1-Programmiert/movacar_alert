@@ -41,6 +41,8 @@ def make_view(
             free_km=500,
             origin=origin or GeoLocation("Potsdam", 52.4, 13.1),
             destination=GeoLocation("Paris", 48.8566, 2.3522),
+            price_minor_units=1234,
+            currency="EUR",
         ),
         distance_km=distance_km,
         is_available=True,
@@ -80,6 +82,7 @@ def test_instant_template_renders_trip_details_and_new_offers_first() -> None:
     assert "Startstadt:</strong> Berlin" in html
     assert "Koordinaten:" not in html
     assert "Entfernung zur Startstadt: 100.0 km" in html
+    assert "Preis: 12.34 EUR" in html
     assert html.count('data-offer-id="new-1"') == 2
 
 

@@ -33,6 +33,8 @@ def test_parse_offers_resolves_complete_offers_from_example_response(
     assert first_offer.start_date == datetime(2026, 7, 20, 4, tzinfo=timezone.utc)
     assert first_offer.end_date == datetime(2026, 7, 26, 19, tzinfo=timezone.utc)
     assert first_offer.free_km == 222
+    assert first_offer.price_minor_units == 100
+    assert first_offer.currency == "EUR"
     assert first_offer.origin.city == "Saint-Mesmes"
     assert first_offer.origin.latitude == 48.9875914
     assert first_offer.origin.longitude == 2.691353

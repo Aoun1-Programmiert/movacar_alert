@@ -17,7 +17,7 @@ from src.validation.trip_validation import normalize_email, validate_trip_id
 
 LOGGER = logging.getLogger("movacar_alert.storage.sqlite_store")
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 _MIGRATIONS_TABLE = "schema_migrations"
 _OFFERS_COLUMNS = {
     "id",
@@ -54,6 +54,8 @@ class StoredOffer:
     origin_city: str
     destination_city: str
     free_km: int
+    price_minor_units: int | None
+    currency: str | None
     first_seen_timestamp: str
     is_deleted: bool
     deleted_at: str | None
@@ -95,6 +97,9 @@ class SQLiteStore:
                 if 3 not in applied_versions:
                     self._apply_offer_coordinate_schema(connection)
                     self._record_migration(connection, 3)
+                if 4 not in applied_versions:
+                    self._apply_offer_price_schema(connection)
+                    self._record_migration(connection, 4)
                 connection.commit()
         except sqlite3.Error as exc:
             LOGGER.error("SQLite schema initialization failed: %s", exc)
@@ -121,6 +126,8 @@ class SQLiteStore:
                     origin_city TEXT NOT NULL,
                     destination_city TEXT NOT NULL,
                     free_km INTEGER NOT NULL,
+                    price_minor_units INTEGER NULL,
+                    currency TEXT NULL,
                     first_seen_timestamp TEXT NOT NULL,
                     is_deleted INTEGER NOT NULL DEFAULT 0,
                     deleted_at TEXT NULL
@@ -229,12 +236,30 @@ class SQLiteStore:
             if column not in existing_columns:
                 connection.execute(f"ALTER TABLE offers ADD COLUMN {column} REAL")
 
+    @staticmethod
+    def _apply_offer_price_schema(connection: sqlite3.Connection) -> None:
+        """Add the optional monetary amount returned for an offer."""
+
+        existing_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(offers)")
+        }
+        price_columns = (
+            ("price_minor_units", "INTEGER"),
+            ("currency", "TEXT"),
+        )
+        for column, column_type in price_columns:
+            if column not in existing_columns:
+                connection.execute(
+                    f"ALTER TABLE offers ADD COLUMN {column} {column_type}"
+                )
+
     def read_offers(self, *, include_deleted: bool = False) -> dict[str, StoredOffer]:
         """Read persisted offers for the next delta calculation."""
 
         query = """
             SELECT id, start_date, end_date, origin_city, destination_city,
-                   free_km, first_seen_timestamp, is_deleted, deleted_at
+                   free_km, price_minor_units, currency, first_seen_timestamp,
+                   is_deleted, deleted_at
             FROM offers
         """
         parameters: tuple[object, ...] = ()
@@ -256,9 +281,11 @@ class SQLiteStore:
                 origin_city=row[3],
                 destination_city=row[4],
                 free_km=row[5],
-                first_seen_timestamp=row[6],
-                is_deleted=bool(row[7]),
-                deleted_at=row[8],
+                price_minor_units=row[6],
+                currency=row[7],
+                first_seen_timestamp=row[8],
+                is_deleted=bool(row[9]),
+                deleted_at=row[10],
             )
             for row in rows
         }
@@ -440,6 +467,7 @@ class SQLiteStore:
                         trips.trip_id, trips.name, trips.pickup_start, trips.pickup_end,
                         trips.start_city, trips.latitude, trips.longitude,
                         offers.id, offers.start_date, offers.end_date, offers.free_km,
+                        offers.price_minor_units, offers.currency,
                         offers.origin_city, offers.origin_latitude, offers.origin_longitude,
                         offers.destination_city, offers.destination_latitude,
                         offers.destination_longitude,
@@ -482,6 +510,8 @@ class SQLiteStore:
             start_date,
             end_date,
             free_km,
+            price_minor_units,
+            currency,
             origin_city,
             origin_latitude,
             origin_longitude,
@@ -510,6 +540,8 @@ class SQLiteStore:
             destination=GeoLocation(
                 destination_city, destination_latitude, destination_longitude
             ),
+            price_minor_units=price_minor_units,
+            currency=currency,
         )
         state = "new" if not is_sent else "existing"
         return TripOfferView(
@@ -886,8 +918,9 @@ class SQLiteStore:
             INSERT INTO offers (
                 id, start_date, end_date, origin_city, origin_latitude,
                 origin_longitude, destination_city, destination_latitude,
-                destination_longitude, free_km, first_seen_timestamp, is_deleted, deleted_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)
+                destination_longitude, free_km, price_minor_units, currency,
+                first_seen_timestamp, is_deleted, deleted_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)
             ON CONFLICT(id) DO UPDATE SET
                 start_date = excluded.start_date,
                 end_date = excluded.end_date,
@@ -898,6 +931,8 @@ class SQLiteStore:
                 destination_latitude = excluded.destination_latitude,
                 destination_longitude = excluded.destination_longitude,
                 free_km = excluded.free_km,
+                price_minor_units = excluded.price_minor_units,
+                currency = excluded.currency,
                 is_deleted = 0,
                 deleted_at = NULL
             """,
@@ -913,6 +948,8 @@ class SQLiteStore:
                     offer.destination.latitude,
                     offer.destination.longitude,
                     offer.free_km,
+                    offer.price_minor_units,
+                    offer.currency,
                     first_seen_timestamp,
                 )
                 for offer in offers
