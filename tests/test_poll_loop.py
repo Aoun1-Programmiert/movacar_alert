@@ -334,7 +334,7 @@ def test_trip_listing_failure_is_reported_as_failed_non_idle_cycle(
     assert "Reisen konnten nicht geladen werden" in caplog.text
 
 
-def test_poll_forever_logs_idle_and_sleeps_for_configured_interval(
+def test_poll_forever_waits_until_next_aligned_slot(
     monkeypatch: pytest.MonkeyPatch,
     settings: SimpleNamespace,
     caplog: pytest.LogCaptureFixture,
@@ -353,7 +353,7 @@ def test_poll_forever_logs_idle_and_sleeps_for_configured_interval(
         calls.append(seconds)
         raise RuntimeError("stop test loop")
 
-    current_time = datetime(2026, 7, 17, 8)
+    current_time = datetime(2026, 7, 17, 8, 7)
     with caplog.at_level("INFO"), pytest.raises(RuntimeError, match="stop test loop"):
         poll_loop.poll_forever(
             settings,
@@ -363,8 +363,21 @@ def test_poll_forever_logs_idle_and_sleeps_for_configured_interval(
         )
 
     assert calls == [
-        ("cycle", current_time.replace(tzinfo=LOCAL_TIMEZONE)),
-        900,
+        480,
     ]
-    assert "Keine Reisen konfiguriert" in caplog.text
-    assert "nächster Zyklus" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("current_time", "expected"),
+    (
+        (datetime(2026, 7, 17, 8, 0), datetime(2026, 7, 17, 8, 15)),
+        (datetime(2026, 7, 17, 8, 14, 59), datetime(2026, 7, 17, 8, 15)),
+        (datetime(2026, 7, 17, 8, 45), datetime(2026, 7, 17, 9, 0)),
+    ),
+)
+def test_next_aligned_cycle_uses_full_quarter_hours(
+    current_time: datetime, expected: datetime
+) -> None:
+    assert poll_loop._next_aligned_cycle(current_time, 15) == expected.replace(
+        tzinfo=LOCAL_TIMEZONE
+    )

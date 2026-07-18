@@ -29,6 +29,10 @@ um 09:00 und 21:00 Uhr (Zeitzone `Europe/Berlin`) an deren konfigurierte
 Empfänger versendet. Ein gemeinsames Angebot kann deshalb in mehreren Reisen
 unabhängig benachrichtigt werden.
 
+Die API wird standardmäßig zu den vollen Viertelstunden (`00`, `15`, `30`,
+`45`) abgefragt. Der erste Lauf wartet ebenfalls auf den nächsten solchen
+Zeitpunkt; `POLL_INTERVAL_MINUTES=15` steuert dabei die Rasterbreite.
+
 ## Funktionen
 
 - Regelmäßige Abfrage einer frei konfigurierbaren HTTP(S)-API
@@ -85,7 +89,7 @@ Gmail-Passwort und committe keine Zugangsdaten.
 | Variable | Erforderlich | Beschreibung |
 | --- | --- | --- |
 | `API_URL` | Ja | Vollständige HTTP(S)-URL der Angebots-API |
-| `POLL_INTERVAL_MINUTES` | Nein | Prüfintervall in Minuten; Standard: `15` |
+| `POLL_INTERVAL_MINUTES` | Nein | Rasterbreite der Prüfzeitpunkte in Minuten; Standard: `15` |
 | `SQLITE_PATH` | Ja | Pfad zur lokalen SQLite-Datenbank |
 | `SMTP_HOST` | Ja | SMTP-Server |
 | `SMTP_PORT` | Ja | SMTP-Port, z. B. `587` für STARTTLS |
