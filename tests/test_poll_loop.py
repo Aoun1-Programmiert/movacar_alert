@@ -365,6 +365,10 @@ def test_poll_forever_waits_until_next_aligned_slot(
     assert calls == [
         480,
     ]
+    assert (
+        "Programm gestartet; erster Durchlauf um 2026-07-17 08:15:00 "
+        "(Wartezeit 480 Sekunden)." in caplog.text
+    )
 
 
 @pytest.mark.parametrize(

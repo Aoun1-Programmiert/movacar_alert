@@ -156,10 +156,20 @@ def poll_forever(
     """Run trip orchestration cycles indefinitely on aligned time slots."""
 
     clock = (lambda: datetime.now(LOCAL_TIMEZONE)) if now is None else now
+    first_cycle = True
     while True:
         current_time = _local_now(clock())
         next_cycle_at = _next_aligned_cycle(current_time, settings.poll_interval_minutes)
-        sleep((next_cycle_at - current_time).total_seconds())
+        wait_seconds = (next_cycle_at - current_time).total_seconds()
+        if first_cycle:
+            LOGGER.info(
+                "Programm gestartet; erster Durchlauf um %s "
+                "(Wartezeit %.0f Sekunden).",
+                next_cycle_at.strftime("%Y-%m-%d %H:%M:%S"),
+                wait_seconds,
+            )
+            first_cycle = False
+        sleep(wait_seconds)
         cycle_now = _local_now(clock())
         result = run_orchestration_cycle(settings, store, now=cycle_now)
         next_cycle_at = _next_aligned_cycle(
