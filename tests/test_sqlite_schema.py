@@ -37,7 +37,11 @@ def test_initialize_schema_creates_offers_table_with_required_columns(
         "first_seen_timestamp",
         "is_deleted",
         "deleted_at",
+        "provider",
     }
+    assert columns["provider"]["type"] == "TEXT"
+    assert columns["provider"]["notnull"] == 1
+    assert columns["provider"]["default"] == "'movacar'"
     assert columns["id"]["pk"] == 1
     assert columns["is_deleted"]["type"] == "INTEGER"
     assert columns["is_deleted"]["notnull"] == 1
@@ -62,7 +66,7 @@ def test_initialize_schema_records_version_and_is_idempotent(tmp_path: Path) -> 
             "SELECT version, applied_at FROM schema_migrations"
         ).fetchall() == first_metadata
 
-    assert [version for version, _ in first_metadata] == [1, 2, 3, 4]
+    assert [version for version, _ in first_metadata] == [1, 2, 3, 4, 5]
 
 
 def test_initialize_schema_baselines_existing_unversioned_offers(
@@ -99,8 +103,11 @@ def test_initialize_schema_baselines_existing_unversioned_offers(
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
             "SELECT version FROM schema_migrations"
-        ).fetchall() == [(1,), (2,), (3,), (4,)]
+        ).fetchall() == [(1,), (2,), (3,), (4,), (5,)]
         assert connection.execute("SELECT id FROM offers").fetchall() == [("legacy",)]
+        assert connection.execute(
+            "SELECT provider FROM offers WHERE id = 'legacy'"
+        ).fetchone() == ("movacar",)
         assert connection.execute(
             """
             SELECT origin_latitude, origin_longitude,
@@ -155,7 +162,7 @@ def test_initialize_schema_adds_trip_schema_to_version_one_database(
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
             "SELECT version FROM schema_migrations"
-        ).fetchall() == [(1,), (2,), (3,), (4,)]
+        ).fetchall() == [(1,), (2,), (3,), (4,), (5,)]
         assert connection.execute("SELECT id FROM offers").fetchall() == [("legacy",)]
         assert {
             row[0]
@@ -241,6 +248,7 @@ def test_trip_schema_has_required_identities_and_foreign_keys(tmp_path: Path) ->
             "longitude",
             "created_at",
             "updated_at",
+            "provider",
         }
         assert {
             row[1] for row in connection.execute("PRAGMA table_info(trip_recipients)")
@@ -260,7 +268,7 @@ def test_trip_schema_has_required_identities_and_foreign_keys(tmp_path: Path) ->
         }
         assert {
             row[1] for row in connection.execute("PRAGMA table_info(trip_overview_slots)")
-        } == {"trip_id", "local_date", "slot_hour", "sent_at"}
+        } == {"trip_id", "local_date", "slot_hour", "sent_at", "provider"}
 
         assert connection.execute(
             "PRAGMA index_info(sqlite_autoindex_trip_recipients_1)"
@@ -269,11 +277,12 @@ def test_trip_schema_has_required_identities_and_foreign_keys(tmp_path: Path) ->
             "PRAGMA index_info(sqlite_autoindex_trip_offers_1)"
         ).fetchall() == [(0, 0, "trip_id"), (1, 1, "offer_id")]
         assert connection.execute(
-            "PRAGMA index_info(sqlite_autoindex_trip_overview_slots_1)"
+            "PRAGMA index_info(idx_trip_overview_slots_provider)"
         ).fetchall() == [
             (0, 0, "trip_id"),
             (1, 1, "local_date"),
             (2, 2, "slot_hour"),
+            (3, 3, "provider"),
         ]
 
         assert {
@@ -331,3 +340,124 @@ def test_deleting_trip_cascades_trip_data_but_retains_global_offer(tmp_path: Pat
         assert connection.execute("SELECT * FROM trip_offers").fetchall() == []
         assert connection.execute("SELECT * FROM trip_overview_slots").fetchall() == []
         assert connection.execute("SELECT id FROM offers").fetchall() == [("offer-1",)]
+
+
+def test_provider_migration_backfills_existing_rows_on_movacar(tmp_path: Path) -> None:
+    database_path = tmp_path / "offers.sqlite"
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE schema_migrations (
+                version INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL
+            )
+            """
+        )
+        for version in (1, 2, 3, 4):
+            connection.execute(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+                (version, "2026-07-17T12:00:00+02:00"),
+            )
+        connection.execute(
+            """
+            CREATE TABLE offers (
+                id TEXT PRIMARY KEY, start_date TEXT NOT NULL, end_date TEXT NOT NULL,
+                origin_city TEXT NOT NULL, destination_city TEXT NOT NULL,
+                free_km INTEGER NOT NULL, first_seen_timestamp TEXT NOT NULL,
+                is_deleted INTEGER NOT NULL DEFAULT 0, deleted_at TEXT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE trips (
+                trip_id TEXT PRIMARY KEY, name TEXT NOT NULL, pickup_start TEXT NOT NULL,
+                pickup_end TEXT NOT NULL, start_city TEXT NOT NULL,
+                latitude REAL NOT NULL, longitude REAL NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE trip_overview_slots (
+                trip_id TEXT NOT NULL, local_date TEXT NOT NULL, slot_hour INTEGER NOT NULL,
+                sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (trip_id, local_date, slot_hour)
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO offers (
+                id, start_date, end_date, origin_city, destination_city,
+                free_km, first_seen_timestamp
+            ) VALUES ('legacy', '2026-07-14', '2026-07-15', 'Berlin', 'Paris', 1, 'now')
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO trips (
+                trip_id, name, pickup_start, pickup_end, start_city, latitude, longitude
+            ) VALUES ('trip-1', 'Sommerfahrt', '2026-07-14', '2026-07-20', 'Berlin', 52.52, 13.405)
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO trip_overview_slots (trip_id, local_date, slot_hour)
+            VALUES ('trip-1', '2026-07-14', 9)
+            """
+        )
+
+    SQLiteStore(database_path).initialize_schema()
+
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT version FROM schema_migrations"
+        ).fetchall() == [(1,), (2,), (3,), (4,), (5,)]
+        assert connection.execute(
+            "SELECT provider FROM offers WHERE id = 'legacy'"
+        ).fetchone() == ("movacar",)
+        assert connection.execute(
+            "SELECT provider FROM trips WHERE trip_id = 'trip-1'"
+        ).fetchone() == ("movacar",)
+        assert connection.execute(
+            "SELECT provider FROM trip_overview_slots WHERE trip_id = 'trip-1'"
+        ).fetchone() == ("movacar",)
+
+
+def test_provider_migration_scopes_overview_slots_per_provider(tmp_path: Path) -> None:
+    database_path = tmp_path / "offers.sqlite"
+    SQLiteStore(database_path).initialize_schema()
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO trips (
+                trip_id, name, pickup_start, pickup_end, start_city, latitude, longitude
+            ) VALUES ('trip-1', 'Sommerfahrt', '2026-07-14', '2026-07-20', 'Berlin', 52.52, 13.405)
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO trip_overview_slots (trip_id, local_date, slot_hour, provider)
+            VALUES ('trip-1', '2026-07-14', 9, 'movacar')
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO trip_overview_slots (trip_id, local_date, slot_hour, provider)
+            VALUES ('trip-1', '2026-07-14', 9, 'imoova')
+            """
+        )
+
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                """
+                INSERT INTO trip_overview_slots (trip_id, local_date, slot_hour, provider)
+                VALUES ('trip-1', '2026-07-14', 9, 'movacar')
+                """
+            )
+
+        assert connection.execute(
+            "SELECT COUNT(*) FROM trip_overview_slots"
+        ).fetchone() == (2,)

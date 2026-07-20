@@ -17,7 +17,7 @@ from src.validation.trip_validation import normalize_email, validate_trip_id
 
 LOGGER = logging.getLogger("movacar_alert.storage.sqlite_store")
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 _MIGRATIONS_TABLE = "schema_migrations"
 _OFFERS_COLUMNS = {
     "id",
@@ -100,6 +100,9 @@ class SQLiteStore:
                 if 4 not in applied_versions:
                     self._apply_offer_price_schema(connection)
                     self._record_migration(connection, 4)
+                if 5 not in applied_versions:
+                    self._apply_provider_schema(connection)
+                    self._record_migration(connection, 5)
                 connection.commit()
         except sqlite3.Error as exc:
             LOGGER.error("SQLite schema initialization failed: %s", exc)
@@ -252,6 +255,66 @@ class SQLiteStore:
                 connection.execute(
                     f"ALTER TABLE offers ADD COLUMN {column} {column_type}"
                 )
+
+    @staticmethod
+    def _apply_provider_schema(connection: sqlite3.Connection) -> None:
+        """Add the per-provider columns and provider-scope the overview slots.
+
+        ``offers`` and ``trips`` gain an additive ``provider`` column. The
+        ``trip_overview_slots`` primary key must change from
+        ``(trip_id, local_date, slot_hour)`` to include ``provider`` so both
+        providers of one trip keep independent slots. SQLite cannot alter a
+        primary key in place, so the table is rebuilt and a unique index on the
+        four-column key replaces the former primary-key uniqueness.
+        """
+
+        for table in ("offers", "trips"):
+            existing_columns = {
+                row[1]
+                for row in connection.execute(f"PRAGMA table_info({table})")
+            }
+            if "provider" not in existing_columns:
+                connection.execute(
+                    f"ALTER TABLE {table} ADD COLUMN provider "
+                    "TEXT NOT NULL DEFAULT 'movacar'"
+                )
+
+        slot_columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(trip_overview_slots)")
+        }
+        if "provider" not in slot_columns:
+            connection.execute(
+                """
+                CREATE TABLE trip_overview_slots_v5 (
+                    trip_id TEXT NOT NULL,
+                    local_date TEXT NOT NULL,
+                    slot_hour INTEGER NOT NULL,
+                    provider TEXT NOT NULL DEFAULT 'movacar',
+                    sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (trip_id) REFERENCES trips(trip_id) ON DELETE CASCADE
+                )
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO trip_overview_slots_v5 (
+                    trip_id, local_date, slot_hour, sent_at
+                )
+                SELECT trip_id, local_date, slot_hour, sent_at
+                FROM trip_overview_slots
+                """
+            )
+            connection.execute("DROP TABLE trip_overview_slots")
+            connection.execute(
+                "ALTER TABLE trip_overview_slots_v5 RENAME TO trip_overview_slots"
+            )
+        connection.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_trip_overview_slots_provider
+            ON trip_overview_slots (trip_id, local_date, slot_hour, provider)
+            """
+        )
 
     def read_offers(self, *, include_deleted: bool = False) -> dict[str, StoredOffer]:
         """Read persisted offers for the next delta calculation."""
