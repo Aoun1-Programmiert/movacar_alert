@@ -1,0 +1,1 @@
+"""Imoova area resolution package."""
