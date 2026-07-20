@@ -103,6 +103,8 @@ class Offer:
             raise ValueError("Offer id must not be empty.")
         if not isinstance(self.provider, Provider):
             raise ValueError("Offer provider must be a Provider value.")
+        if self.provider is Provider.IMOOVA and not self.id.startswith("imoova:"):
+            raise ValueError("Imoova offer id must start with the 'imoova:' prefix.")
         if not isinstance(self.start_date, datetime) or not isinstance(self.end_date, datetime):
             raise ValueError("Offer dates must be datetime values.")
         if self.end_date <= self.start_date:

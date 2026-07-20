@@ -155,3 +155,30 @@ def test_trip_offer_view_rejects_mismatched_tier(trip: Trip, offer: Offer) -> No
 def test_removed_classified_offer_contract_is_not_exposed() -> None:
     assert not hasattr(offer_models, "ClassifiedOffer")
     assert not hasattr(offer_models, "OfferState")
+
+
+def _offer_with(**overrides: object) -> Offer:
+    defaults: dict[str, object] = dict(
+        id="offer-1",
+        start_date=datetime(2026, 7, 14, 8, 0),
+        end_date=datetime(2026, 7, 16, 8, 0),
+        free_km=500,
+        origin=GeoLocation("Berlin", 52.52, 13.405),
+        destination=GeoLocation("Paris", 48.8566, 2.3522),
+        provider=Provider.MOVACAR,
+    )
+    defaults.update(overrides)
+    return Offer(**defaults)  # type: ignore[arg-type]
+
+
+def test_imoova_offer_requires_prefixed_id() -> None:
+    with pytest.raises(ValueError, match="imoova:"):
+        _offer_with(id="1234", provider=Provider.IMOOVA)
+
+
+def test_imoova_offer_accepts_prefixed_id() -> None:
+    assert _offer_with(id="imoova:1234", provider=Provider.IMOOVA).id == "imoova:1234"
+
+
+def test_movacar_offer_id_is_not_required_to_be_prefixed() -> None:
+    assert _offer_with(id="1234", provider=Provider.MOVACAR).id == "1234"
