@@ -23,6 +23,8 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
+from shapely.geometry import Point, Polygon
+
 LOGGER = logging.getLogger("movacar_alert.areas.imoova_area_resolver")
 
 
@@ -95,6 +97,10 @@ class ImoovaAreaResolver:
 
     def __init__(self, areas: tuple[ImoovaArea, ...]) -> None:
         self._areas = areas
+        self._polygons = tuple(
+            (area.name, Polygon([(lon, lat) for lat, lon in area.polygon]))
+            for area in areas
+        )
 
     @classmethod
     def from_file(cls, path: str | Path) -> "ImoovaAreaResolver":
@@ -105,7 +111,13 @@ class ImoovaAreaResolver:
     def resolve_area(self, latitude: float, longitude: float) -> str | None:
         """Return the name of the area containing the coordinates, or ``None``.
 
-        Implemented with ``shapely`` in task T05.
+        Uses a ``shapely`` point-in-polygon test against every configured area.
+        Coordinates exactly on a polygon boundary count as contained
+        (``covers``). The first matching area wins.
         """
 
-        raise NotImplementedError("resolve_area is implemented in task T05.")
+        point = Point(longitude, latitude)
+        for name, polygon in self._polygons:
+            if polygon.covers(point):
+                return name
+        return None

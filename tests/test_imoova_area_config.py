@@ -64,5 +64,4 @@ def test_resolver_exposes_lat_lon_interface_returning_name_or_none() -> None:
         (ImoovaArea("Europe", ((1.0, 2.0), (3.0, 4.0), (5.0, 6.0))),)
     )
 
-    with pytest.raises(NotImplementedError):
-        resolver.resolve_area(52.52, 13.405)
+    assert resolver.resolve_area(52.52, 13.405) is None
