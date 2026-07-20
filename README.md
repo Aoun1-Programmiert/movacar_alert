@@ -190,6 +190,23 @@ Standardfehlerausgabe. Die JSON-Ausgabe der Empfängerbefehle enthält bei
 `add` und `remove` `trip_id` und `recipient`; `list` enthält `trip_id` und
 das alphabetisch sortierte Array `recipients`.
 
+## Imoova-Areal-Zuordnung (OpenStreetMap)
+
+Die Zuordnung einer Reise zu einer Imoova-Area erfolgt über einen
+Punkt-in-Polygon-Test der Reisekoordinaten gegen die in
+`config/imoova_areas.json` hinterlegten Area-Polygone. Diese Datei wird durch
+ein eigenständiges Skript erzeugt beziehungsweise aktualisiert, das die
+Grenzen je Area direkt über die Overpass API von OpenStreetMap abfragt:
+
+```bash
+python scripts/build_imoova_area_mapping.py --output config/imoova_areas.json
+```
+
+Das Skript läuft **nicht** im Polling-Pfad. Ein Lauf ist „Alles-oder-nichts“:
+Nur wenn alle Areas erfolgreich abgefragt wurden, wird die Datei geschrieben;
+Netzwerk- oder Antwortfehler lassen eine bereits vorhandene, gültige
+Konfigurationsdatei unverändert.
+
 ## Tests
 
 ```bash
