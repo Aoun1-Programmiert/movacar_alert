@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from src.models.offer import GeoLocation, Offer
+from src.models.offer import GeoLocation, Offer, Provider
 from src.storage.sqlite_store import SQLiteStore, SQLiteStoreError
 
 
@@ -19,6 +19,7 @@ def offer() -> Offer:
         free_km=500,
         origin=GeoLocation("Berlin", 52.52, 13.405),
         destination=GeoLocation("Paris", 48.8566, 2.3522),
+        provider=Provider.MOVACAR,
         price_minor_units=1234,
         currency="EUR",
     )
@@ -190,6 +191,7 @@ def test_cleanup_preserves_ids_present_in_current_response(
         free_km=offer.free_km,
         origin=offer.origin,
         destination=offer.destination,
+        provider=Provider.MOVACAR,
     )
     store.insert_offers([offer, second_offer])
 
@@ -213,6 +215,7 @@ def test_reconcile_trip_offer_availability_is_trip_scoped_and_preserves_sent_sta
         free_km=offer.free_km,
         origin=offer.origin,
         destination=offer.destination,
+        provider=Provider.MOVACAR,
     )
     store.insert_offers([offer, second_offer])
     with sqlite3.connect(store.database_path) as connection:

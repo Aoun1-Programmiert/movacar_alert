@@ -6,7 +6,7 @@ import sqlite3
 
 import pytest
 
-from src.models.offer import DistanceTier, GeoLocation, Offer, Trip
+from src.models.offer import DistanceTier, GeoLocation, Offer, Provider, Trip
 from src.notifications.trip_mail_view import prepare_trip_mail_view
 from src.storage.sqlite_store import SQLiteStore, SQLiteStoreError, TripNotFoundError
 from src.synchronization.trip_offer_synchronizer import synchronize_trip_offers
@@ -40,6 +40,7 @@ def make_offer(offer_id: str, city: str, latitude: float) -> Offer:
         free_km=500,
         origin=GeoLocation(city, latitude, 13.0),
         destination=GeoLocation("Paris", 48.8566, 2.3522),
+        provider=Provider.MOVACAR,
     )
 
 

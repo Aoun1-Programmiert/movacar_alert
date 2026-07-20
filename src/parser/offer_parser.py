@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Any
 
-from src.models.offer import GeoLocation, Offer
+from src.models.offer import GeoLocation, Offer, Provider
 
 
 class OfferParsingError(ValueError):
@@ -95,6 +95,7 @@ def _parse_offer(
             ),
             origin=origin,
             destination=destination,
+            provider=Provider.MOVACAR,
             price_minor_units=price_minor_units,
             currency=currency,
         )

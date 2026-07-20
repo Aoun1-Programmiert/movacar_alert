@@ -18,6 +18,30 @@ from src.validation.trip_validation import (
 )
 
 
+class Provider(str, Enum):
+    """The concrete source a single offer originates from."""
+
+    MOVACAR = "movacar"
+    IMOOVA = "imoova"
+
+
+class TripProviderSelection(str, Enum):
+    """The provider assignment of a trip, resolvable into concrete providers."""
+
+    MOVACAR = "movacar"
+    IMOOVA = "imoova"
+    BOTH = "both"
+
+    def resolve(self) -> tuple[Provider, ...]:
+        """Resolve this selection into one or two concrete ``Provider`` values."""
+
+        if self is TripProviderSelection.MOVACAR:
+            return (Provider.MOVACAR,)
+        if self is TripProviderSelection.IMOOVA:
+            return (Provider.IMOOVA,)
+        return (Provider.MOVACAR, Provider.IMOOVA)
+
+
 @dataclass(frozen=True)
 class GeoLocation:
     """A station location resolved from the API response."""
@@ -70,12 +94,15 @@ class Offer:
     free_km: int
     origin: GeoLocation
     destination: GeoLocation
+    provider: Provider
     price_minor_units: int | None = None
     currency: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.id, str) or not self.id.strip():
             raise ValueError("Offer id must not be empty.")
+        if not isinstance(self.provider, Provider):
+            raise ValueError("Offer provider must be a Provider value.")
         if not isinstance(self.start_date, datetime) or not isinstance(self.end_date, datetime):
             raise ValueError("Offer dates must be datetime values.")
         if self.end_date <= self.start_date:
@@ -137,6 +164,7 @@ class Trip:
     start_city: str
     latitude: float
     longitude: float
+    provider: TripProviderSelection = TripProviderSelection.MOVACAR
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "trip_id", validate_trip_id(self.trip_id))
@@ -146,6 +174,20 @@ class Trip:
         latitude, longitude = validate_coordinates(self.latitude, self.longitude)
         object.__setattr__(self, "latitude", latitude)
         object.__setattr__(self, "longitude", longitude)
+        object.__setattr__(self, "provider", _coerce_trip_provider(self.provider))
+
+
+def _coerce_trip_provider(value: object) -> TripProviderSelection:
+    if isinstance(value, TripProviderSelection):
+        return value
+    if isinstance(value, str):
+        try:
+            return TripProviderSelection(value)
+        except ValueError as error:
+            raise ValueError(
+                "Trip provider must be one of 'movacar', 'imoova' or 'both'."
+            ) from error
+    raise ValueError("Trip provider must be a TripProviderSelection value.")
 
 
 @dataclass(frozen=True)

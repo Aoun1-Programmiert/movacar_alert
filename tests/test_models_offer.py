@@ -8,8 +8,10 @@ from src.models.offer import (
     DistanceTier,
     GeoLocation,
     Offer,
+    Provider,
     Trip,
     TripOfferView,
+    TripProviderSelection,
     TripRecipient,
 )
 import src.models.offer as offer_models
@@ -24,6 +26,7 @@ def offer() -> Offer:
         free_km=500,
         origin=GeoLocation("Berlin", 52.52, 13.405),
         destination=GeoLocation("Paris", 48.8566, 2.3522),
+        provider=Provider.MOVACAR,
     )
 
 

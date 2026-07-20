@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from src.models.offer import GeoLocation, Offer
+from src.models.offer import GeoLocation, Offer, Provider
 from src.models.trip import Trip
 from src.storage.sqlite_store import SQLiteStore
 
@@ -39,6 +39,7 @@ def make_offer(offer_id: str) -> Offer:
         free_km=500,
         origin=GeoLocation("Hamburg", 53.5511, 9.9937),
         destination=GeoLocation("Paris", 48.8566, 2.3522),
+        provider=Provider.MOVACAR,
     )
 
 

@@ -5,10 +5,12 @@ from .offer import (
     GeoLocation,
     Location,
     Offer,
+    Provider,
     Trip,
     TripOffer,
     TripOfferState,
     TripOfferView,
+    TripProviderSelection,
     TripRecipient,
 )
 
@@ -17,9 +19,11 @@ __all__ = [
     "GeoLocation",
     "Location",
     "Offer",
+    "Provider",
     "Trip",
     "TripOffer",
     "TripOfferState",
     "TripOfferView",
+    "TripProviderSelection",
     "TripRecipient",
 ]

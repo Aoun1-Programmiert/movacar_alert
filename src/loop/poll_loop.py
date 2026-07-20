@@ -233,6 +233,7 @@ def _with_local_dates(offers: Iterable[Offer]) -> tuple[Offer, ...]:
                 free_km=offer.free_km,
                 origin=offer.origin,
                 destination=offer.destination,
+                provider=offer.provider,
             )
         )
     return tuple(converted)

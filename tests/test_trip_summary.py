@@ -9,7 +9,7 @@ import pytest
 from src.config.settings import SmtpSettings
 from src.loop.summary_schedule import SummarySlot, latest_due_summary_slot
 from src.mailer.smtp_mailer import SmtpTransportError
-from src.models.offer import GeoLocation, Offer, Trip
+from src.models.offer import GeoLocation, Offer, Provider, Trip
 from src.notifications.instant_notification import MissingTripRecipientsError
 from src.notifications.trip_summary import send_due_trip_summary
 from src.storage.sqlite_store import SQLiteStore
@@ -55,6 +55,7 @@ def _offer() -> Offer:
         free_km=500,
         origin=GeoLocation("Potsdam", 52.4, 13.1),
         destination=GeoLocation("Paris", 48.8566, 2.3522),
+        provider=Provider.MOVACAR,
     )
 
 

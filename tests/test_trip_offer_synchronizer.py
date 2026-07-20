@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from src.models.offer import GeoLocation, Offer
+from src.models.offer import GeoLocation, Offer, Provider
 from src.models.trip import Trip
 from src.storage.sqlite_store import SQLiteStore, SQLiteStoreError
 from src.synchronization.trip_offer_synchronizer import synchronize_trip_offers
@@ -41,6 +41,7 @@ def offer() -> Offer:
         free_km=500,
         origin=GeoLocation("Hamburg", 53.5511, 9.9937),
         destination=GeoLocation("Paris", 48.8566, 2.3522),
+        provider=Provider.MOVACAR,
     )
 
 
@@ -98,6 +99,7 @@ def test_existing_relation_is_refreshed_without_resetting_notification_state(
         free_km=750,
         origin=GeoLocation("Potsdam", 52.3906, 13.0645),
         destination=offer.destination,
+        provider=Provider.MOVACAR,
     )
     result = synchronize_trip_offers(store, trip, [changed_offer])
 
@@ -175,6 +177,7 @@ def test_distance_failure_leaves_global_and_trip_state_unchanged(
         free_km=offer.free_km,
         origin=GeoLocation("Cologne", 50.9375, 6.9603),
         destination=offer.destination,
+        provider=Provider.MOVACAR,
     )
     store.create_trip(trip)
     call_count = 0
@@ -248,6 +251,7 @@ def test_successful_complete_synchronization_marks_missing_relations_unavailable
         free_km=offer.free_km,
         origin=GeoLocation("Cologne", 50.9375, 6.9603),
         destination=offer.destination,
+        provider=Provider.MOVACAR,
     )
     store.create_trip(trip)
     synchronize_trip_offers(store, trip, [offer, missing_offer])
@@ -288,6 +292,7 @@ def test_failed_synchronization_does_not_reconcile_existing_availability(
         free_km=offer.free_km,
         origin=GeoLocation("Cologne", 50.9375, 6.9603),
         destination=offer.destination,
+        provider=Provider.MOVACAR,
     )
     store.create_trip(trip)
     synchronize_trip_offers(store, trip, [offer, missing_offer])

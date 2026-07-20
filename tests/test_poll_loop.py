@@ -11,7 +11,7 @@ from src.api.api_client import ApiNetworkError
 from src.config.timezone import LOCAL_TIMEZONE
 from src.loop import poll_loop
 from src.mailer.smtp_mailer import SmtpTransportError
-from src.models.offer import GeoLocation, Offer, Trip
+from src.models.offer import GeoLocation, Offer, Provider, Trip
 from src.parser.offer_parser import OfferParsingError
 from src.storage.sqlite_store import SQLiteStoreError
 
@@ -71,6 +71,7 @@ def offer() -> Offer:
         free_km=500,
         origin=GeoLocation("Hamburg", 53.5511, 9.9937),
         destination=GeoLocation("Paris", 48.8566, 2.3522),
+        provider=Provider.MOVACAR,
     )
 
 
