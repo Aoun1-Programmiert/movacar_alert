@@ -117,6 +117,21 @@ bewirken weder Versand noch Angebotsfilterung.
 
 Umgebungsvariablen des Betriebssystems haben Vorrang vor Werten aus `.env`.
 
+## Imoova-Arealpolygone erzeugen
+
+Die Imoova-Arealdatei `config/imoova_areas.json` enthält versionierte Areas mit
+einem Namen und einem Polygon aus `[latitude, longitude]`-Koordinaten. Das
+eigenständige Skript fragt die zugehörigen Grenzen bei der Overpass API ab und
+aktualisiert die Datei atomar:
+
+```bash
+python3 scripts/build_imoova_area_mapping.py canada europe
+```
+
+Das Skript läuft ausschließlich bei der Pflege der Arealdatei und niemals im
+Polling-Pfad. Bei einem Overpass- oder Antwortfehler bleibt eine vorhandene,
+gültige Konfigurationsdatei unverändert.
+
 ## Starten
 
 ```bash
