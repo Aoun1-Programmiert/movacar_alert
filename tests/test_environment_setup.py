@@ -10,14 +10,14 @@ PROJECT_ROOT = Path(__file__).parents[1]
 REQUIREMENTS_FILE = PROJECT_ROOT / "requirements.txt"
 
 
-def test_requirements_contains_only_the_existing_test_dependency() -> None:
+def test_requirements_contains_project_dependencies() -> None:
     requirements = [
         line.strip()
         for line in REQUIREMENTS_FILE.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     ]
 
-    assert requirements == ["pytest==9.1.1"]
+    assert requirements == ["pytest==9.1.1", "shapely>=2.0,<3"]
 
 
 def test_source_modules_import_in_fresh_venv(tmp_path: Path) -> None:
