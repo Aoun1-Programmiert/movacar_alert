@@ -149,13 +149,13 @@ kann ein abweichender Datenbankpfad angegeben werden.
 
 ```bash
 python -m src.admin_cli trip create \
-  --trip-id sommer-2026 \
-  --name "Sommerfahrt" \
-  --pickup-start 2026-07-20 \
-  --pickup-end 2026-07-25 \
-  --start-city Berlin \
-  --latitude 52.52 \
-  --longitude 13.405
+  --trip-id lara-aouni-reise-2 \
+  --name "Aouni & Lara - von Venedig aus weiter" \
+  --pickup-start 2026-08-01 \
+  --pickup-end 2026-08-05 \
+  --start-city Venedig \
+  --latitude 45.4387 \
+  --longitude 12.3271
 
 python -m src.admin_cli trip list
 python -m src.admin_cli trip list --json

@@ -184,7 +184,7 @@ erzeugt beziehungsweise aktualisiert. Läuft nicht im Polling-Pfad.
 durchführen (Endpunkt `relocations/{area}`, Parameter `earliest_departure`)
 und das vollständige Antwortformat für Route, Zeitraum, Preis, Verfügbarkeit
 und Koordinaten dokumentieren. Diese Aufgabe erzeugt keinen Produktionscode,
-sondern die verbindliche Grundlage für T09.
+sondern die verbindliche Grundlage für T09. API: https://www.imoova.com/relocations/europe?earliest_departure=2026-07-27
 
 **Acceptance Criteria:**
 
