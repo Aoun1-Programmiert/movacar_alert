@@ -11,7 +11,7 @@ from math import isfinite
 from pathlib import Path
 
 from src.config.timezone import LOCAL_TIMEZONE
-from src.models.offer import DistanceTier, GeoLocation, Offer, TripOfferView
+from src.models.offer import DistanceTier, GeoLocation, Offer, Provider, TripOfferView
 from src.models.trip import Trip, TripRecipient
 from src.validation.trip_validation import normalize_email, validate_trip_id
 
@@ -533,6 +533,7 @@ class SQLiteStore:
         )
         offer = Offer(
             id=offer_id,
+            provider=Provider.MOVACAR,
             start_date=datetime.fromisoformat(start_date),
             end_date=datetime.fromisoformat(end_date),
             free_km=free_km,

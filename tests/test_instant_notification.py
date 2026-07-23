@@ -8,7 +8,7 @@ import pytest
 
 from src.config.settings import SmtpSettings
 from src.mailer.smtp_mailer import SmtpTransportError
-from src.models.offer import GeoLocation, Offer, Trip
+from src.models.offer import GeoLocation, Offer, Provider, Trip
 from src.notifications.instant_notification import (
     MissingTripRecipientsError,
     send_instant_trip_notification,
@@ -57,6 +57,7 @@ def make_offer(offer_id: str) -> Offer:
         free_km=500,
         origin=GeoLocation("Hamburg", 53.5511, 9.9937),
         destination=GeoLocation("Paris", 48.8566, 2.3522),
+        provider=Provider.MOVACAR,
     )
 
 

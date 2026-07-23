@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Any
 
-from src.models.offer import GeoLocation, Offer
+from src.models.offer import GeoLocation, Offer, Provider
 
 
 class OfferParsingError(ValueError):
@@ -82,6 +82,7 @@ def _parse_offer(
     try:
         return Offer(
             id=_require_string(offer, "id", f"data[{index}]"),
+            provider=Provider.MOVACAR,
             start_date=_parse_datetime(
                 _require_string(attributes, "start_date", f"data[{index}].attributes"),
                 f"data[{index}].attributes.start_date",

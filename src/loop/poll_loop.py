@@ -228,6 +228,7 @@ def _with_local_dates(offers: Iterable[Offer]) -> tuple[Offer, ...]:
         converted.append(
             Offer(
                 id=offer.id,
+                provider=offer.provider,
                 start_date=offer.start_date.astimezone(LOCAL_TIMEZONE),
                 end_date=offer.end_date.astimezone(LOCAL_TIMEZONE),
                 free_km=offer.free_km,

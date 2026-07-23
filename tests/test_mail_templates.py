@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 import pytest
 
 from src.mailer.templates import render_offer_email, render_offer_summary_email
-from src.models.offer import DistanceTier, GeoLocation, Offer, Trip, TripOfferView
+from src.models.offer import DistanceTier, GeoLocation, Offer, Provider, Trip, TripOfferView
 from src.notifications.trip_mail_view import TripMailView
 
 
@@ -43,6 +43,7 @@ def make_view(
             destination=GeoLocation("Paris", 48.8566, 2.3522),
             price_minor_units=1234,
             currency="EUR",
+            provider=Provider.MOVACAR,
         ),
         distance_km=distance_km,
         is_available=True,
@@ -161,6 +162,7 @@ def test_template_escapes_trip_and_offer_content_and_renders_empty_sections() ->
     offer = make_view("<offer&1>", 20, trip=trip)
     escaped_offer = Offer(
         id=offer.offer.id,
+        provider=Provider.MOVACAR,
         start_date=offer.offer.start_date,
         end_date=offer.offer.end_date,
         free_km=offer.offer.free_km,

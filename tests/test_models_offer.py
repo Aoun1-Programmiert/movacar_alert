@@ -8,7 +8,9 @@ from src.models.offer import (
     DistanceTier,
     GeoLocation,
     Offer,
+    Provider,
     Trip,
+    TripProviderSelection,
     TripOfferView,
     TripRecipient,
 )
@@ -24,6 +26,7 @@ def offer() -> Offer:
         free_km=500,
         origin=GeoLocation("Berlin", 52.52, 13.405),
         destination=GeoLocation("Paris", 48.8566, 2.3522),
+        provider=Provider.MOVACAR,
     )
 
 
@@ -48,6 +51,56 @@ def test_trip_contains_identity_window_city_and_coordinates(trip: Trip) -> None:
     assert trip.start_city == "Berlin"
     assert trip.latitude == 52.52
     assert trip.longitude == 13.405
+    assert trip.provider is TripProviderSelection.MOVACAR
+    assert trip.providers == (Provider.MOVACAR,)
+
+
+@pytest.mark.parametrize(
+    ("selection", "providers"),
+    (
+        (TripProviderSelection.MOVACAR, (Provider.MOVACAR,)),
+        (TripProviderSelection.IMOOVA, (Provider.IMOOVA,)),
+        (TripProviderSelection.BOTH, (Provider.MOVACAR, Provider.IMOOVA)),
+    ),
+)
+def test_trip_provider_selection_resolves(
+    selection: TripProviderSelection, providers: tuple[Provider, ...]
+) -> None:
+    assert selection.resolve() == providers
+
+
+def test_provider_enums_expose_only_supported_values() -> None:
+    assert {provider.value for provider in Provider} == {"movacar", "imoova"}
+    assert {selection.value for selection in TripProviderSelection} == {
+        "movacar",
+        "imoova",
+        "both",
+    }
+
+
+def test_offer_requires_provider() -> None:
+    with pytest.raises(TypeError):
+        Offer(
+            id="offer-123",
+            start_date=datetime(2026, 7, 14, 8, 0),
+            end_date=datetime(2026, 7, 16, 8, 0),
+            free_km=500,
+            origin=GeoLocation("Berlin", 52.52, 13.405),
+            destination=GeoLocation("Paris", 48.8566, 2.3522),
+        )
+
+
+def test_imoova_offer_requires_prefixed_id(offer: Offer) -> None:
+    with pytest.raises(ValueError, match="imoova:"):
+        Offer(
+            id=offer.id,
+            start_date=offer.start_date,
+            end_date=offer.end_date,
+            free_km=offer.free_km,
+            origin=offer.origin,
+            destination=offer.destination,
+            provider=Provider.IMOOVA,
+        )
 
 
 def test_trip_recipient_is_trip_scoped() -> None:

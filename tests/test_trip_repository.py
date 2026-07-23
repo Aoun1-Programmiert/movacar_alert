@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.models.offer import GeoLocation, Offer
+from src.models.offer import GeoLocation, Offer, Provider
 from src.models.trip import Trip, TripRecipient
 from src.storage.sqlite_store import (
     DuplicateTripRecipientError,
@@ -106,6 +106,7 @@ def test_deleting_trip_atomically_removes_trip_state_but_keeps_global_offer(
         free_km=500,
         origin=GeoLocation("Berlin", 52.52, 13.405),
         destination=GeoLocation("Paris", 48.8566, 2.3522),
+        provider=Provider.MOVACAR,
     )
     store.insert_offers([offer])
     store.create_trip(trip)

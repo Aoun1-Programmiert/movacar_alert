@@ -60,6 +60,30 @@ class GeoLocation:
 Location = GeoLocation
 
 
+class Provider(str, Enum):
+    """A supported source of offers."""
+
+    MOVACAR = "movacar"
+    IMOOVA = "imoova"
+
+
+class TripProviderSelection(str, Enum):
+    """The provider selection persisted for a trip."""
+
+    MOVACAR = "movacar"
+    IMOOVA = "imoova"
+    BOTH = "both"
+
+    def resolve(self) -> tuple[Provider, ...]:
+        """Resolve the trip selection into concrete offer providers."""
+
+        if self is self.MOVACAR:
+            return (Provider.MOVACAR,)
+        if self is self.IMOOVA:
+            return (Provider.IMOOVA,)
+        return (Provider.MOVACAR, Provider.IMOOVA)
+
+
 @dataclass(frozen=True)
 class Offer:
     """A complete offer with both stations resolved."""
@@ -70,12 +94,17 @@ class Offer:
     free_km: int
     origin: GeoLocation
     destination: GeoLocation
+    provider: Provider
     price_minor_units: int | None = None
     currency: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.id, str) or not self.id.strip():
             raise ValueError("Offer id must not be empty.")
+        if not isinstance(self.provider, Provider):
+            raise TypeError("Offer provider must be a Provider.")
+        if self.provider is Provider.IMOOVA and not self.id.startswith("imoova:"):
+            raise ValueError("Imoova offer ids must start with 'imoova:'.")
         if not isinstance(self.start_date, datetime) or not isinstance(self.end_date, datetime):
             raise ValueError("Offer dates must be datetime values.")
         if self.end_date <= self.start_date:
@@ -137,6 +166,7 @@ class Trip:
     start_city: str
     latitude: float
     longitude: float
+    provider: TripProviderSelection = TripProviderSelection.MOVACAR
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "trip_id", validate_trip_id(self.trip_id))
@@ -146,6 +176,14 @@ class Trip:
         latitude, longitude = validate_coordinates(self.latitude, self.longitude)
         object.__setattr__(self, "latitude", latitude)
         object.__setattr__(self, "longitude", longitude)
+        if not isinstance(self.provider, TripProviderSelection):
+            raise TypeError("Trip provider must be a TripProviderSelection.")
+
+    @property
+    def providers(self) -> tuple[Provider, ...]:
+        """Return the concrete providers selected for this trip."""
+
+        return self.provider.resolve()
 
 
 @dataclass(frozen=True)
