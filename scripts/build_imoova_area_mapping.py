@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import re
 import sys
 from pathlib import Path
@@ -16,6 +17,7 @@ from urllib.request import Request, urlopen
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "imoova_areas.json"
 DEFAULT_OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 DEFAULT_TIMEOUT_SECONDS = 60
+LOGGER = logging.getLogger(__name__)
 
 
 class OverpassError(RuntimeError):
@@ -104,6 +106,12 @@ def _fetch_overpass_elements(
     overpass_url: str,
     timeout_seconds: float,
 ) -> list[Any]:
+    LOGGER.info(
+        "Requesting Overpass area %r from %s with query: %s",
+        area_name,
+        overpass_url,
+        query,
+    )
     request = Request(
         overpass_url,
         data=urlencode({"data": query}).encode(),
@@ -309,6 +317,7 @@ def _write_json_atomically(config_path: Path, config: dict[str, Any]) -> None:
 
 def main() -> int:
     args = _parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     try:
         update_area_config(
             args.areas,

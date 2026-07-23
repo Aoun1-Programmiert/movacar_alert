@@ -113,8 +113,14 @@ def test_update_area_config_preserves_existing_file_when_overpass_fails(
 
 def test_fetch_area_polygon_rejects_invalid_overpass_response(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     monkeypatch.setattr(area_script, "urlopen", lambda *args, **kwargs: _Response(b"{}"))
 
-    with pytest.raises(area_script.OverpassError, match="no elements list"):
+    with caplog.at_level("INFO", logger=area_script.__name__), pytest.raises(
+        area_script.OverpassError, match="no elements list"
+    ):
         area_script.fetch_area_polygon("canada")
+
+    assert "Requesting Overpass area 'canada'" in caplog.text
+    assert 'relation["name"~"^canada$",i]["type"="boundary"]' in caplog.text

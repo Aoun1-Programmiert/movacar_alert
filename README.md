@@ -130,7 +130,8 @@ python3 scripts/build_imoova_area_mapping.py canada europe
 
 Das Skript läuft ausschließlich bei der Pflege der Arealdatei und niemals im
 Polling-Pfad. Bei einem Overpass- oder Antwortfehler bleibt eine vorhandene,
-gültige Konfigurationsdatei unverändert.
+gültige Konfigurationsdatei unverändert. Es protokolliert vor jeder Anfrage den
+Overpass-Endpunkt und die ausgeführte Query auf der Standardfehlerausgabe.
 
 ## Starten
 
