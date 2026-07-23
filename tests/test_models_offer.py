@@ -103,6 +103,24 @@ def test_imoova_offer_requires_prefixed_id(offer: Offer) -> None:
         )
 
 
+def test_imoova_offer_accepts_prefixed_id(offer: Offer) -> None:
+    imoova_offer = Offer(
+        id="imoova:offer-123",
+        start_date=offer.start_date,
+        end_date=offer.end_date,
+        free_km=offer.free_km,
+        origin=offer.origin,
+        destination=offer.destination,
+        provider=Provider.IMOOVA,
+    )
+
+    assert imoova_offer.id == "imoova:offer-123"
+
+
+def test_movacar_offer_id_remains_unprefixed(offer: Offer) -> None:
+    assert offer.id == "offer-123"
+
+
 def test_trip_recipient_is_trip_scoped() -> None:
     recipient = TripRecipient("trip-123", "user@example.com")
 
