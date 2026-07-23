@@ -17,8 +17,9 @@ from src.validation.trip_validation import normalize_email, validate_trip_id
 
 LOGGER = logging.getLogger("movacar_alert.storage.sqlite_store")
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 _MIGRATIONS_TABLE = "schema_migrations"
+_TRIP_OVERVIEW_SLOTS_PROVIDER_INDEX = "uq_trip_overview_slots_provider"
 _OFFERS_COLUMNS = {
     "id",
     "start_date",
@@ -100,6 +101,9 @@ class SQLiteStore:
                 if 4 not in applied_versions:
                     self._apply_offer_price_schema(connection)
                     self._record_migration(connection, 4)
+                if 5 not in applied_versions:
+                    self._apply_provider_schema(connection)
+                    self._record_migration(connection, 5)
                 connection.commit()
         except sqlite3.Error as exc:
             LOGGER.error("SQLite schema initialization failed: %s", exc)
@@ -252,6 +256,53 @@ class SQLiteStore:
                 connection.execute(
                     f"ALTER TABLE offers ADD COLUMN {column} {column_type}"
                 )
+
+    @staticmethod
+    def _apply_provider_schema(connection: sqlite3.Connection) -> None:
+        """Add provider ownership to persisted offers, trips, and summary slots."""
+
+        for table in ("offers", "trips", "trip_overview_slots"):
+            existing_columns = {
+                row[1] for row in connection.execute(f"PRAGMA table_info({table})")
+            }
+            if "provider" not in existing_columns:
+                connection.execute(
+                    f"ALTER TABLE {table} "
+                    "ADD COLUMN provider TEXT NOT NULL DEFAULT 'movacar'"
+                )
+
+        index = connection.execute(
+            """
+            SELECT name, "unique"
+            FROM pragma_index_list('trip_overview_slots')
+            WHERE name = ?
+            """,
+            (_TRIP_OVERVIEW_SLOTS_PROVIDER_INDEX,),
+        ).fetchone()
+        if index is not None:
+            index_columns = tuple(
+                row[2]
+                for row in connection.execute(
+                    f"PRAGMA index_info({_TRIP_OVERVIEW_SLOTS_PROVIDER_INDEX})"
+                )
+            )
+            if index[1] == 1 and index_columns == (
+                "trip_id",
+                "local_date",
+                "slot_hour",
+                "provider",
+            ):
+                return
+            raise sqlite3.DatabaseError(
+                f"Index {_TRIP_OVERVIEW_SLOTS_PROVIDER_INDEX!r} has an incompatible definition."
+            )
+
+        connection.execute(
+            f"""
+            CREATE UNIQUE INDEX {_TRIP_OVERVIEW_SLOTS_PROVIDER_INDEX}
+            ON trip_overview_slots (trip_id, local_date, slot_hour, provider)
+            """
+        )
 
     def read_offers(self, *, include_deleted: bool = False) -> dict[str, StoredOffer]:
         """Read persisted offers for the next delta calculation."""

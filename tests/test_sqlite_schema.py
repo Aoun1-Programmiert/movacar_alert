@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.storage.sqlite_store import SQLiteStore, SQLiteStoreError
+from src.storage.sqlite_store import SCHEMA_VERSION, SQLiteStore, SQLiteStoreError
 
 
 def test_initialize_schema_creates_offers_table_with_required_columns(
@@ -37,6 +37,7 @@ def test_initialize_schema_creates_offers_table_with_required_columns(
         "first_seen_timestamp",
         "is_deleted",
         "deleted_at",
+        "provider",
     }
     assert columns["id"]["pk"] == 1
     assert columns["is_deleted"]["type"] == "INTEGER"
@@ -44,6 +45,12 @@ def test_initialize_schema_creates_offers_table_with_required_columns(
     assert columns["is_deleted"]["default"] == "0"
     assert columns["deleted_at"]["type"] == "TEXT"
     assert columns["deleted_at"]["notnull"] == 0
+    assert columns["provider"] == {
+        "type": "TEXT",
+        "notnull": 1,
+        "default": "'movacar'",
+        "pk": 0,
+    }
 
 
 def test_initialize_schema_records_version_and_is_idempotent(tmp_path: Path) -> None:
@@ -62,7 +69,76 @@ def test_initialize_schema_records_version_and_is_idempotent(tmp_path: Path) -> 
             "SELECT version, applied_at FROM schema_migrations"
         ).fetchall() == first_metadata
 
-    assert [version for version, _ in first_metadata] == [1, 2, 3, 4]
+    assert [version for version, _ in first_metadata] == list(range(1, SCHEMA_VERSION + 1))
+
+
+def test_version_five_migration_backfills_provider_columns(tmp_path: Path) -> None:
+    database_path = tmp_path / "offers.sqlite"
+    _create_version_four_database(database_path)
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO offers (
+                id, start_date, end_date, origin_city, destination_city,
+                free_km, first_seen_timestamp
+            ) VALUES ('offer-1', '2026-07-14', '2026-07-15', 'Berlin', 'Paris', 1, 'now')
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO trips (
+                trip_id, name, pickup_start, pickup_end, start_city, latitude, longitude
+            ) VALUES ('trip-1', 'Sommerfahrt', '2026-07-14', '2026-07-20', 'Berlin', 52.52, 13.405)
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO trip_overview_slots (trip_id, local_date, slot_hour)
+            VALUES ('trip-1', '2026-07-14', 9)
+            """
+        )
+
+    SQLiteStore(database_path).initialize_schema()
+
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT provider FROM offers WHERE id = 'offer-1'"
+        ).fetchone() == ("movacar",)
+        assert connection.execute(
+            "SELECT provider FROM trips WHERE trip_id = 'trip-1'"
+        ).fetchone() == ("movacar",)
+        assert connection.execute(
+            """
+            SELECT provider
+            FROM trip_overview_slots
+            WHERE trip_id = 'trip-1' AND local_date = '2026-07-14' AND slot_hour = 9
+            """
+        ).fetchone() == ("movacar",)
+
+
+def test_version_five_migration_rolls_back_when_index_creation_fails(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "offers.sqlite"
+    _create_version_four_database(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "CREATE INDEX uq_trip_overview_slots_provider ON offers (id)"
+        )
+
+    with pytest.raises(SQLiteStoreError, match="initialize the SQLite schema"):
+        SQLiteStore(database_path).initialize_schema()
+
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT version FROM schema_migrations ORDER BY version"
+        ).fetchall() == [(1,), (2,), (3,), (4,)]
+        for table in ("offers", "trips", "trip_overview_slots"):
+            columns = {
+                row[1] for row in connection.execute(f"PRAGMA table_info({table})")
+            }
+            assert "provider" not in columns
 
 
 def test_initialize_schema_baselines_existing_unversioned_offers(
@@ -99,7 +175,7 @@ def test_initialize_schema_baselines_existing_unversioned_offers(
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
             "SELECT version FROM schema_migrations"
-        ).fetchall() == [(1,), (2,), (3,), (4,)]
+        ).fetchall() == [(1,), (2,), (3,), (4,), (5,)]
         assert connection.execute("SELECT id FROM offers").fetchall() == [("legacy",)]
         assert connection.execute(
             """
@@ -155,7 +231,7 @@ def test_initialize_schema_adds_trip_schema_to_version_one_database(
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
             "SELECT version FROM schema_migrations"
-        ).fetchall() == [(1,), (2,), (3,), (4,)]
+        ).fetchall() == [(1,), (2,), (3,), (4,), (5,)]
         assert connection.execute("SELECT id FROM offers").fetchall() == [("legacy",)]
         assert {
             row[0]
@@ -241,6 +317,7 @@ def test_trip_schema_has_required_identities_and_foreign_keys(tmp_path: Path) ->
             "longitude",
             "created_at",
             "updated_at",
+            "provider",
         }
         assert {
             row[1] for row in connection.execute("PRAGMA table_info(trip_recipients)")
@@ -260,7 +337,7 @@ def test_trip_schema_has_required_identities_and_foreign_keys(tmp_path: Path) ->
         }
         assert {
             row[1] for row in connection.execute("PRAGMA table_info(trip_overview_slots)")
-        } == {"trip_id", "local_date", "slot_hour", "sent_at"}
+        } == {"trip_id", "local_date", "slot_hour", "sent_at", "provider"}
 
         assert connection.execute(
             "PRAGMA index_info(sqlite_autoindex_trip_recipients_1)"
@@ -275,6 +352,21 @@ def test_trip_schema_has_required_identities_and_foreign_keys(tmp_path: Path) ->
             (1, 1, "local_date"),
             (2, 2, "slot_hour"),
         ]
+        assert connection.execute(
+            "PRAGMA index_info(uq_trip_overview_slots_provider)"
+        ).fetchall() == [
+            (0, 0, "trip_id"),
+            (1, 1, "local_date"),
+            (2, 2, "slot_hour"),
+            (3, 4, "provider"),
+        ]
+        assert connection.execute(
+            """
+            SELECT "unique"
+            FROM pragma_index_list('trip_overview_slots')
+            WHERE name = 'uq_trip_overview_slots_provider'
+            """
+        ).fetchone() == (1,)
 
         assert {
             (row[2], row[3], row[6])
@@ -283,6 +375,59 @@ def test_trip_schema_has_required_identities_and_foreign_keys(tmp_path: Path) ->
             ("offers", "offer_id", "NO ACTION"),
             ("trips", "trip_id", "CASCADE"),
         }
+
+
+def _create_version_four_database(database_path: Path) -> None:
+    with sqlite3.connect(database_path) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE schema_migrations (
+                version INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL
+            );
+            INSERT INTO schema_migrations (version, applied_at) VALUES
+                (1, '2026-07-17T12:00:00+02:00'),
+                (2, '2026-07-17T12:00:00+02:00'),
+                (3, '2026-07-17T12:00:00+02:00'),
+                (4, '2026-07-17T12:00:00+02:00');
+            CREATE TABLE offers (
+                id TEXT PRIMARY KEY,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                origin_city TEXT NOT NULL,
+                destination_city TEXT NOT NULL,
+                free_km INTEGER NOT NULL,
+                price_minor_units INTEGER NULL,
+                currency TEXT NULL,
+                first_seen_timestamp TEXT NOT NULL,
+                is_deleted INTEGER NOT NULL DEFAULT 0,
+                deleted_at TEXT NULL,
+                origin_latitude REAL,
+                origin_longitude REAL,
+                destination_latitude REAL,
+                destination_longitude REAL
+            );
+            CREATE TABLE trips (
+                trip_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                pickup_start TEXT NOT NULL,
+                pickup_end TEXT NOT NULL,
+                start_city TEXT NOT NULL,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE trip_overview_slots (
+                trip_id TEXT NOT NULL,
+                local_date TEXT NOT NULL,
+                slot_hour INTEGER NOT NULL,
+                sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (trip_id, local_date, slot_hour),
+                FOREIGN KEY (trip_id) REFERENCES trips(trip_id) ON DELETE CASCADE
+            );
+            """
+        )
 
 
 def test_deleting_trip_cascades_trip_data_but_retains_global_offer(tmp_path: Path) -> None:
